@@ -45,7 +45,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
     }
   }
 
-  async getSimilarKeywords(baseKeyword: string, projectId?: string): Promise<string[]> {
+  async getSimilarKeywords(baseKeyword: string, projectId?: string, regionId?: number): Promise<string[]> {
     const apiKey = await this.getDecryptedApiKey(projectId);
 
     if (apiKey) {
@@ -59,6 +59,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
           },
           body: JSON.stringify({
             Phrases: [baseKeyword],
+            GeoId: regionId ? [regionId] : undefined,
           }),
         });
 
@@ -91,7 +92,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
     ];
   }
 
-  async getSearchVolume(keywords: string[], projectId?: string): Promise<Record<string, number>> {
+  async getSearchVolume(keywords: string[], projectId?: string, regionId?: number): Promise<Record<string, number>> {
     const apiKey = await this.getDecryptedApiKey(projectId);
     const result: Record<string, number> = {};
 
@@ -106,6 +107,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
           },
           body: JSON.stringify({
             Phrases: keywords,
+            GeoId: regionId ? [regionId] : undefined,
           }),
         });
 

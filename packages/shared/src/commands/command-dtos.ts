@@ -10,6 +10,7 @@ export interface CollectSemanticDto {
   projectId: string;
   seedKeywords: string[];
   depth?: number;
+  regionId?: number;
 }
 
 export interface GenerateContentPlanDto {

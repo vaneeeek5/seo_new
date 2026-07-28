@@ -25,24 +25,24 @@ export class SemanticProcessor extends WorkerHost {
   }
 
   async process(job: Job<any, any, string>): Promise<any> {
-    const { taskId, projectId, seedKeywords } = job.data;
-    this.logger.log(`[SemanticWorker] Processing job ${job.id} for task ${taskId}...`);
+    const { taskId, projectId, seedKeywords, regionId } = job.data;
+    this.logger.log(`[SemanticWorker] Processing job ${job.id} for task ${taskId} (Region: ${regionId || 225})...`);
 
     try {
       const primarySeed = (Array.isArray(seedKeywords) && seedKeywords.length > 0)
         ? seedKeywords[0]
         : 'seo automation';
 
-      // Step 1: Query Yandex Wordstat API for similar keywords (LSI)
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 30, `Fetching Yandex Wordstat LSI phrases for "${primarySeed}"...`);
-      const extractedPhrases = await this.wordstatProvider.getSimilarKeywords(primarySeed, projectId);
+      // Step 1: Query Yandex Wordstat API for similar keywords (LSI) with Region ID
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 30, `Fetching Yandex Wordstat LSI phrases for "${primarySeed}" (Region ID: ${regionId || 225})...`);
+      const extractedPhrases = await this.wordstatProvider.getSimilarKeywords(primarySeed, projectId, regionId);
 
       // Step 2: Fetch monthly search volumes
       this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `Evaluating search volume (GetDynamics) for ${extractedPhrases.length} keywords...`);
-      const volumeMap = await this.wordstatProvider.getSearchVolume(extractedPhrases, projectId);
+      const volumeMap = await this.wordstatProvider.getSearchVolume(extractedPhrases, projectId, regionId);
 
       // Step 3: Create or update Cluster in DB with DRAFT status for moderation
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 85, `Persisting cluster & keywords to database...`);
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 85, `Persisting non-zero cluster & keywords to database...`);
       
       const clusterName = `Cluster: ${primarySeed}`;
       let cluster = await this.prisma.cluster.findFirst({
@@ -59,11 +59,17 @@ export class SemanticProcessor extends WorkerHost {
         });
       }
 
-      // Persist individual Keyword records mapped to cluster
+      // Filter out keywords with 0 search volume (shows <= 0)
       let savedCount = 0;
       for (const phrase of extractedPhrases) {
         const searchVol = volumeMap[phrase] || 0;
         
+        // Auto-filter 0 volume keywords
+        if (searchVol <= 0) {
+          this.logger.log(`[SemanticWorker] Dropping zero-volume keyword: "${phrase}"`);
+          continue;
+        }
+
         await this.prisma.keyword.create({
           data: {
             projectId,
@@ -82,7 +88,7 @@ export class SemanticProcessor extends WorkerHost {
         projectId,
         TaskStatus.COMPLETED,
         100,
-        `Yandex Wordstat parsed successfully! Created cluster "${clusterName}" with ${savedCount} keywords.`
+        `Yandex Wordstat parsed successfully! Created cluster "${clusterName}" with ${savedCount} non-zero keywords.`
       );
 
       return {

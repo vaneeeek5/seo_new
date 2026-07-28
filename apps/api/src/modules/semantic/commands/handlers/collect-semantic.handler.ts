@@ -27,6 +27,7 @@ export class CollectSemanticHandler implements ICommandHandler<CollectSemanticCo
       projectId: dto.projectId,
       seedKeywords: dto.seedKeywords,
       depth: dto.depth || 2,
+      regionId: dto.regionId || 225,
     }).catch(err => this.logger.warn(`BullMQ Redis enqueue warning: ${err.message}`));
 
     // Emit initial QUEUED status event
