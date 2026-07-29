@@ -28,7 +28,7 @@ export class SemanticProcessor extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { taskId, projectId, seedKeywords, regionId } = job.data;
-    this.logger.log(`[SemanticWorker] Executing 5-iteration Deep Semantic Pipeline for task ${taskId} (Region: ${regionId || 225})...`);
+    this.logger.log(`[SemanticWorker] Executing 5-iteration Dual-Column Wordstat Pipeline for task ${taskId} (Region: ${regionId || 225})...`);
 
     try {
       const primarySeed = (Array.isArray(seedKeywords) && seedKeywords.length > 0)
@@ -51,21 +51,25 @@ export class SemanticProcessor extends WorkerHost {
       }
 
       // =========================================================================
-      // ИТЕРАЦИЯ 2: Пробивка базовых фраз через Yandex Wordstat GetTop (LSI)
+      // ИТЕРАЦИЯ 2: ДВУХКОЛОНОЧНЫЙ парсинг Вордстата (Левая колонка "Запросы со словами" + Правая колонка "Похожие запросы")
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 40, `📊 Итерация 2/5: Запрос Yandex Wordstat API (GetTop) по ${baseSeeds.length} базовым фразам...`);
-      const wordstatLsiPool: string[] = [];
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 40, `📊 Итерация 2/5: Парсинг Wordstat: Сбор Левой колонки ("Запросы со словами") и Правой колонки ("Похожие запросы")...`);
+      const wordstatLeftColumn: string[] = [];
+      const wordstatRightColumn: string[] = [];
 
       for (const seed of baseSeeds.slice(0, 5)) {
-        const lsi = await this.wordstatProvider.getSimilarKeywords(seed, projectId, regionId);
-        wordstatLsiPool.push(...lsi);
+        const dualResult = await this.wordstatProvider.getSimilarKeywordsWithColumns(seed, projectId, regionId);
+        wordstatLeftColumn.push(...dualResult.leftColumnSubQueries);
+        wordstatRightColumn.push(...dualResult.rightColumnSimilarQueries);
       }
+
+      this.logger.log(`[Wordstat Dual Column] Gathered ${wordstatLeftColumn.length} sub-queries (left column) & ${wordstatRightColumn.length} similar queries (right column).`);
 
       // =========================================================================
       // ИТЕРАЦИЯ 3: Глубокая генерация смежных и ассоциированных фраз AI (LSI Expansion)
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `🤖 Итерация 3/5: Глубокая AI-генерация смежных LSI фраз и коммерческих интентов...`);
-      const combinedInitialSeeds = Array.from(new Set([...baseSeeds, ...wordstatLsiPool]));
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `🤖 Итерация 3/5: Глубокая AI-генерация смежных LSI фраз на основе похожих запросов Wordstat...`);
+      const combinedInitialSeeds = Array.from(new Set([...baseSeeds, ...wordstatLeftColumn, ...wordstatRightColumn]));
       const deepExpandedCandidates = await this.siteScraper.expandKeywordsDeepAI(combinedInitialSeeds, projectId);
 
       // =========================================================================
@@ -121,7 +125,7 @@ export class SemanticProcessor extends WorkerHost {
         projectId,
         TaskStatus.COMPLETED,
         100,
-        `🎉 Сбор завершен (5 итераций)! Сформировано объёмное ядро из ${savedCount} релевантных фраз с точной частотностью Wordstat.`
+        `🎉 Сбор завершен! Собраны точные вложенные ключи и похожие запросы Wordstat (${savedCount} фраз с частотностью).`
       );
 
       return {

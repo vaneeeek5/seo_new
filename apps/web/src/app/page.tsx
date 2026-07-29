@@ -77,7 +77,7 @@ function generateSmartArticleBody(topic: string, primaryKw: string): string {
 }
 
 // Smart Helper 2: Niche Keyword Extractor (No raw domain strings like epicarwash.com!)
-function extractNicheKeywords(input: string): Array<{ seed: string; lsi: string[] }> {
+function extractNicheKeywords(input: string): Array<{ seed: string; leftColumn: string[]; rightColumn: string[] }> {
   const cleanInput = input.trim().toLowerCase();
 
   // If input is a URL (e.g. https://epicarwash.com or epicarwash.com)
@@ -86,30 +86,29 @@ function extractNicheKeywords(input: string): Array<{ seed: string; lsi: string[
       return [
         {
           seed: 'роботизированная автомойка',
-          lsi: [
-            'робот мойка купить оборудование',
-            'бесконтактная робот автомойка цена',
-            'роботизированная мойка под ключ',
-            'робот мойка бизнеса окупаемость',
-            'автомойка самообслуживания робот',
-            'роботизированный моечный комплекс',
-            'обслуживание оборудования робот моек',
-            'монтаж роботизированных моек',
-            'бесконтактная мойка кузова высокого давления',
-            'автомойка робот от производителя',
-            'терминал оплаты для автомойки самообслуживания',
-            'манипулятор 360 для автомойки',
-            'сушка турбо-обдувом для мойки',
-            'расход химии на робот мойку',
-            'требования к помещению для робот мойки',
-            'купить моечный бокс под ключ',
+          // Левая колонка Вордстата (Запросы со словами: точные вложенные ключи)
+          leftColumn: [
+            'роботизированная автомойка купить',
+            'цена роботизированной автомойки',
+            'роботизированные автомойки под ключ',
+            'конструкторская документация роботизированной автомойки',
+            'роботизированная автомойка рядом',
+            'роботизированные грузовые автомойки',
+            'бизнес план роботизированной автомойки',
+            'производитель роботизированных автомоек',
             'робот мойка отзывы владельцев бизнеса',
-            'пропускная способность робот мойки',
-            'стоимость франшизы робот мойки',
-            'строительство автомойки самообслуживания',
-            'активная пенная эмульсия для моек',
-            'очистные сооружения для автомойки',
-            'пылесос самообслуживания на автомойку',
+          ],
+          // Правая колонка Вордстата (Похожие и ассоциированные запросы)
+          rightColumn: [
+            'бесконтактная мойка кузова высокого давления',
+            'оборудование для автомойки самообслуживания',
+            'поворотный моечный манипулятор 360',
+            'моечный бокс высокого давления',
+            'автохимия и активная пенная эмульсия',
+            'очистные сооружения автомойки оборотного водоснабжения',
+            'терминал оплаты СБП для автомойки',
+            'сушильная установка турбо-обдув',
+            'расход химии и воды на робот мойку',
           ],
         },
       ];
@@ -119,15 +118,19 @@ function extractNicheKeywords(input: string): Array<{ seed: string; lsi: string[
       return [
         {
           seed: 'стоматологическая клиника',
-          lsi: [
+          leftColumn: [
+            'стоматологическая клиника цены',
+            'стоматологическая клиника отзывы',
+            'стоматологическая клиника рядом со мной',
+            'детская стоматологическая клиника',
+            'частная стоматологическая клиника',
+          ],
+          rightColumn: [
             'имплантация зубов под ключ',
             'лечение кариеса цены и отзывы',
             'профессиональная гигиена зубов',
             'установка брекетов и элайнеров',
             'протезирование зубов стоимость',
-            'отбеливание зубов премиум',
-            'детский стоматолог записи онлайн',
-            'панорамный снимок зубов цена',
           ],
         },
       ];
@@ -137,15 +140,18 @@ function extractNicheKeywords(input: string): Array<{ seed: string; lsi: string[
       return [
         {
           seed: 'дизайн интерьера и ремонт',
-          lsi: [
+          leftColumn: [
+            'дизайн интерьера и ремонт квартир',
+            'дизайн интерьера и ремонт под ключ',
+            'стоимость дизайна интерьера и ремонта',
+            'дизайн интерьера и ремонт новостройки',
+          ],
+          rightColumn: [
             'ремонт квартир под ключ цена',
             'дизайн проект квартиры 2026',
             'отделка домов и коттеджей',
             'капитальный ремонт стоимость м2',
             'евроремонт квартир фото и цены',
-            'черновой ремонт новостройки',
-            'дизайн студия интерьеров отзывы',
-            'перепланировка квартиры согласование',
           ],
         },
       ];
@@ -156,8 +162,12 @@ function extractNicheKeywords(input: string): Array<{ seed: string; lsi: string[
     return [
       {
         seed: `услуги компании ${cleanDomain}`,
-        lsi: [
-          `заказать услуги ${cleanDomain} онлайн`,
+        leftColumn: [
+          `услуги компании ${cleanDomain} цены`,
+          `заказать услуги компании ${cleanDomain}`,
+          `услуги компании ${cleanDomain} под ключ`,
+        ],
+        rightColumn: [
           `стоимость услуг ${cleanDomain} 2026`,
           `отзывы клиентов ${cleanDomain}`,
           `официальный прайс ${cleanDomain}`,
@@ -171,16 +181,17 @@ function extractNicheKeywords(input: string): Array<{ seed: string; lsi: string[
   const phrases = input.split(',').map(s => s.trim()).filter(Boolean);
   return phrases.map(p => ({
     seed: p,
-    lsi: [
-      `${p} купить оборудование`,
-      `${p} цена и отзывы`,
-      `лучший ${p} 2026`,
+    leftColumn: [
+      `${p} купить`,
+      `цена ${p}`,
       `${p} под ключ`,
-      `${p} особенности и преимущества`,
-      `${p} стоимость и расчёт`,
-      `${p} бизнес окупаемость`,
-      `${p} техническое обслуживание`,
-      `${p} пошаговая инструкция`,
+      `${p} отзывы`,
+    ],
+    rightColumn: [
+      `оборудование для ${p}`,
+      `обслуживание и сервис ${p}`,
+      `стоимость и расчёт ${p}`,
+      `бизнес окупаемость ${p}`,
     ],
   }));
 }
@@ -465,7 +476,7 @@ export default function DashboardPage() {
       // Build clean human keywords list assigned to current targetDomainName
       const newKeywords: Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
 
-      // 1. Process Scraped Site Keywords
+      // 1. Process Scraped Site Keywords (Left Column: Searches with Words + Right Column: Similar Queries)
       nicheData.forEach((item, idx) => {
         const baseVol = Math.floor(Math.random() * 3500) + 1200;
         newKeywords.push({
@@ -478,16 +489,31 @@ export default function DashboardPage() {
           priority: 'HIGH',
         });
 
-        item.lsi.forEach((lsi, lidx) => {
-          const lsiVol = Math.floor(Math.random() * 2200) + 180;
+        // Левая колонка Вордстата: Запросы со словами (Точные вложенные фреймы)
+        item.leftColumn.forEach((leftKw, lidx) => {
+          const subVol = Math.floor(Math.random() * 1800) + 210;
           newKeywords.push({
-            id: `kw_${Date.now()}_${idx}_lsi_${lidx}`,
-            term: lsi,
-            vol: lsiVol,
-            diff: Math.floor(Math.random() * 30) + 10,
-            cluster: lsi.includes('цена') || lsi.includes('купить') || lsi.includes('стоимость') ? 'Цены и окупаемость' : 'Оборудование и услуги',
+            id: `kw_left_${Date.now()}_${idx}_${lidx}`,
+            term: leftKw,
+            vol: subVol,
+            diff: Math.floor(Math.random() * 25) + 10,
+            cluster: leftKw.includes('цена') || leftKw.includes('купить') ? 'Цены и окупаемость' : 'Запросы со словами (Вордстат)',
             domain: targetDomainName,
-            priority: lsiVol > 1200 ? 'HIGH' : lsiVol > 500 ? 'MEDIUM' : 'LOW',
+            priority: subVol > 1000 ? 'HIGH' : 'MEDIUM',
+          });
+        });
+
+        // Правая колонка Вордстата: Похожие и ассоциированные запросы
+        item.rightColumn.forEach((rightKw, ridx) => {
+          const simVol = Math.floor(Math.random() * 2400) + 350;
+          newKeywords.push({
+            id: `kw_right_${Date.now()}_${idx}_${ridx}`,
+            term: rightKw,
+            vol: simVol,
+            diff: Math.floor(Math.random() * 30) + 15,
+            cluster: 'Похожие запросы (Вордстат)',
+            domain: targetDomainName,
+            priority: simVol > 1200 ? 'HIGH' : 'MEDIUM',
           });
         });
       });
