@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DomainEventTypes, TaskStatusChangedEvent, TaskStatus, TaskType } from '@seo-saas/shared';
 import { YandexWordstatProvider } from '../providers/yandex-wordstat.provider';
+import { SiteScraperService } from '../services/site-scraper.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ContentStatus } from '@prisma/client';
 
@@ -19,6 +20,7 @@ export class SemanticProcessor extends WorkerHost {
   constructor(
     private readonly eventEmitter: EventEmitter2,
     private readonly wordstatProvider: YandexWordstatProvider,
+    private readonly siteScraper: SiteScraperService,
     private readonly prisma: PrismaService,
   ) {
     super();
@@ -33,18 +35,28 @@ export class SemanticProcessor extends WorkerHost {
         ? seedKeywords[0]
         : 'seo automation';
 
-      // Step 1: Query Yandex Wordstat API for similar keywords (LSI) with Region ID
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 30, `Fetching Yandex Wordstat LSI phrases for "${primarySeed}" (Region ID: ${regionId || 225})...`);
-      const extractedPhrases = await this.wordstatProvider.getSimilarKeywords(primarySeed, projectId, regionId);
+      let extractedPhrases: string[] = [];
 
-      // Step 2: Fetch monthly search volumes
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `Evaluating search volume (GetDynamics) for ${extractedPhrases.length} keywords...`);
+      // Step 1: Detect if primarySeed is a website URL vs direct text keyword
+      const isUrl = primarySeed.startsWith('http://') || primarySeed.startsWith('https://') || primarySeed.includes('.com') || primarySeed.includes('.ru');
+
+      if (isUrl) {
+        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 25, `🌐 Crawling website pages at "${primarySeed}" and extracting service keywords...`);
+        const scraped = await this.siteScraper.scrapeSiteKeywords(primarySeed, projectId);
+        extractedPhrases = scraped.extractedKeywords;
+      } else {
+        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 25, `Fetching Yandex Wordstat LSI phrases for "${primarySeed}" (Region ID: ${regionId || 225})...`);
+        extractedPhrases = await this.wordstatProvider.getSimilarKeywords(primarySeed, projectId, regionId);
+      }
+
+      // Step 2: Query Yandex Wordstat for monthly search volumes
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `Evaluating Yandex Wordstat search volume (GetDynamics) for ${extractedPhrases.length} phrases...`);
       const volumeMap = await this.wordstatProvider.getSearchVolume(extractedPhrases, projectId, regionId);
 
-      // Step 3: Create or update Cluster in DB with DRAFT status for moderation
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 85, `Persisting non-zero cluster & keywords to database...`);
+      // Step 3: Create or update Cluster in DB with DRAFT status
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 85, `Filtering zero-volume keys and persisting cluster to database...`);
       
-      const clusterName = `Cluster: ${primarySeed}`;
+      const clusterName = isUrl ? `Site Semantics: ${primarySeed}` : `Cluster: ${primarySeed}`;
       let cluster = await this.prisma.cluster.findFirst({
         where: { projectId, name: clusterName },
       });
@@ -88,7 +100,7 @@ export class SemanticProcessor extends WorkerHost {
         projectId,
         TaskStatus.COMPLETED,
         100,
-        `Yandex Wordstat parsed successfully! Created cluster "${clusterName}" with ${savedCount} non-zero keywords.`
+        `Site semantics gathered! Extracted & verified ${savedCount} high-intent keywords for "${clusterName}".`
       );
 
       return {
