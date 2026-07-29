@@ -187,16 +187,19 @@ export default function DashboardPage() {
     { id: 'conn_demo_wp', provider: 'WORDPRESS_CMS', name: 'Основной сайт WordPress API', maskedKey: 'wp_a-****-****-00ff', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString() },
   ]);
 
-  // Semantics State (Step 2: Region, Volumes, Priority, Exclusion)
+  // Semantics State (Step 2: Region, Volumes, Priority, Exclusion, Domain Filter)
   const [seedInput, setSeedInput] = useState('');
   const [selectedRegionId, setSelectedRegionId] = useState<number>(225); // Default: Россия (225)
   const [sortByVol, setSortByVol] = useState<'desc' | 'asc'>('desc');
+  const [filterDomain, setFilterDomain] = useState<string>('ALL');
   const [filterCluster, setFilterCluster] = useState<string>('ALL');
-  const [keywordsList, setKeywordsList] = useState<Array<{ id: string; term: string; vol: number; diff: number; cluster: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }>>([
-    { id: 'kw_1', term: 'роботизированная автомойка', vol: 4800, diff: 34, cluster: 'Оборудование и услуги', priority: 'HIGH' },
-    { id: 'kw_2', term: 'робот мойка купить оборудование', vol: 3200, diff: 42, cluster: 'Оборудование и услуги', priority: 'HIGH' },
-    { id: 'kw_3', term: 'бесконтактная робот автомойка цена', vol: 1920, diff: 28, cluster: 'Цены и окупаемость', priority: 'HIGH' },
-    { id: 'kw_4', term: 'роботизированная мойка под ключ', vol: 1450, diff: 22, cluster: 'Цены и окупаемость', priority: 'MEDIUM' },
+  const [keywordsList, setKeywordsList] = useState<Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }>>([
+    { id: 'kw_1', term: 'роботизированная автомойка', vol: 4800, diff: 34, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', priority: 'HIGH' },
+    { id: 'kw_2', term: 'робот мойка купить оборудование', vol: 3200, diff: 42, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', priority: 'HIGH' },
+    { id: 'kw_3', term: 'бесконтактная робот автомойка цена', vol: 1920, diff: 28, cluster: 'Цены и окупаемость', domain: 'epicarwash.com', priority: 'HIGH' },
+    { id: 'kw_4', term: 'роботизированная мойка под ключ', vol: 1450, diff: 22, cluster: 'Цены и окупаемость', domain: 'epicarwash.com', priority: 'MEDIUM' },
+    { id: 'kw_5', term: 'seo автоматизация продвижения', vol: 3800, diff: 30, cluster: 'AI Маркетинг', domain: 'seo-saas.com', priority: 'HIGH' },
+    { id: 'kw_6', term: 'автоматический поиск семантики вордстат', vol: 2400, diff: 26, cluster: 'AI Маркетинг', domain: 'seo-saas.com', priority: 'HIGH' },
   ]);
 
   // Content Generation State (Step 3 & 4: Edit/Preview, Multi-stage generation UI)
@@ -403,16 +406,22 @@ export default function DashboardPage() {
     }
   };
 
-  // Step 2: Smart Semantics Collection with Niche Extractor & Region Filter
+  // Step 2: Smart Semantics Collection with Domain Mapping
   const handleCollectSemantics = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     try {
       const baseUrl = getApiBaseUrl();
       const rawInput = seedInput.trim() || 'https://epicarwash.com';
 
+      // Detect Domain Name for keyword scoping
+      let targetDomainName = 'epicarwash.com';
+      if (rawInput.startsWith('http://') || rawInput.startsWith('https://') || rawInput.includes('.com') || rawInput.includes('.ru')) {
+        targetDomainName = rawInput.replace(/https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
+      }
+
       const nicheData = extractNicheKeywords(rawInput);
       const selectedRegionName = REGION_OPTIONS.find(r => r.id === selectedRegionId)?.name || 'Россия';
-      addLog(`[Команда] CollectSemantic -> Запрос Yandex Wordstat для темы "${nicheData[0]?.seed}" (Регион: ${selectedRegionName})...`);
+      addLog(`[Команда] CollectSemantic -> Запрос Yandex Wordstat для сайта ${targetDomainName} (Регион: ${selectedRegionName})...`);
 
       const res = await fetch(`${baseUrl}/semantics/collect`, {
         method: 'POST',
@@ -421,8 +430,8 @@ export default function DashboardPage() {
       });
       await res.json();
 
-      // Build clean human keywords list without domain names
-      const newKeywords: Array<{ id: string; term: string; vol: number; diff: number; cluster: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
+      // Build clean human keywords list assigned to current targetDomainName
+      const newKeywords: Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
 
       nicheData.forEach((item, idx) => {
         const baseVol = Math.floor(Math.random() * 3500) + 1200;
@@ -432,6 +441,7 @@ export default function DashboardPage() {
           vol: baseVol,
           diff: Math.floor(Math.random() * 35) + 15,
           cluster: 'Оборудование и услуги',
+          domain: targetDomainName,
           priority: 'HIGH',
         });
 
@@ -443,12 +453,14 @@ export default function DashboardPage() {
             vol: lsiVol,
             diff: Math.floor(Math.random() * 30) + 10,
             cluster: lsi.includes('цена') || lsi.includes('купить') || lsi.includes('стоимость') ? 'Цены и окупаемость' : 'Оборудование и услуги',
+            domain: targetDomainName,
             priority: lsiVol > 1200 ? 'HIGH' : lsiVol > 500 ? 'MEDIUM' : 'LOW',
           });
         });
       });
 
       setKeywordsList(prev => [...newKeywords, ...prev]);
+      setFilterDomain(targetDomainName);
       setSeedInput('');
     } catch (err: any) {
       addLog(`[Ошибка Сбора] ${err.message}`);
@@ -603,12 +615,14 @@ export default function DashboardPage() {
     }
   };
 
-  // Computed & Filtered Keywords List
-  const filteredKeywords = keywordsList
-    .filter(kw => filterCluster === 'ALL' || kw.cluster === filterCluster)
-    .sort((a, b) => sortByVol === 'desc' ? b.vol - a.vol : a.vol - b.vol);
-
+  // Computed Available Domains & Clusters
+  const availableDomains = Array.from(new Set(keywordsList.map(k => k.domain)));
   const availableClusters = Array.from(new Set(keywordsList.map(k => k.cluster)));
+
+  // Computed & Filtered Keywords List (Filtered by Domain, Cluster & Sorted by Vol)
+  const filteredKeywords = keywordsList
+    .filter(kw => (filterDomain === 'ALL' || kw.domain === filterDomain) && (filterCluster === 'ALL' || kw.cluster === filterCluster))
+    .sort((a, b) => sortByVol === 'desc' ? b.vol - a.vol : a.vol - b.vol);
 
   return (
     <div style={{ padding: '32px', maxWidth: '1360px', margin: '0 auto', fontFamily: 'sans-serif' }}>
@@ -959,14 +973,14 @@ export default function DashboardPage() {
       )}
 
       {/* ============================================================ */}
-      {/* ВКЛАДКА 2: СЕМАНТИКА (STEP 2: REGION, VOLUMES, PRIORITY, EXCLUSION) */}
+      {/* ВКЛАДКА 2: СЕМАНТИКА (STEP 2: REGION, VOLUMES, PRIORITY, EXCLUSION, DOMAIN FILTER) */}
       {/* ============================================================ */}
       {activeTab === 'semantics' && (
         <div style={{ background: '#111827', borderRadius: '12px', padding: '24px', border: '1px solid #1f2937' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <div>
               <h2 style={{ fontSize: '20px', marginTop: 0, color: '#38bdf8' }}>🔍 Сбор и Управление Семантическим Ядром</h2>
-              <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>Умный вычленение поисковых интентов ниши без доменного мусора, частотность Wordstat и фильтрация.</p>
+              <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0 }}>Умный вычленение поисковых интентов ниши, фильтрация по сайту/домену, частотность Wordstat.</p>
             </div>
           </div>
 
@@ -1006,16 +1020,30 @@ export default function DashboardPage() {
             </div>
           </form>
 
-          {/* Controls: Filter & Sort */}
+          {/* Controls: Domain Filter, Cluster Filter & Sort */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', background: '#111827', padding: '12px 16px', borderRadius: '8px', border: '1px solid #1f2937' }}>
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              {/* Domain / Site Filter */}
+              <span style={{ fontSize: '13px', color: '#9ca3af' }}>🌐 Фильтр по домену:</span>
+              <select
+                value={filterDomain}
+                onChange={(e) => setFilterDomain(e.target.value)}
+                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #38bdf8', background: '#1f2937', color: '#38bdf8', fontSize: '13px', fontWeight: 600 }}
+              >
+                <option value="ALL">Все сайты / домены ({keywordsList.length})</option>
+                {availableDomains.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+
+              {/* Cluster Filter */}
               <span style={{ fontSize: '13px', color: '#9ca3af' }}>Фильтр по кластеру:</span>
               <select
                 value={filterCluster}
                 onChange={(e) => setFilterCluster(e.target.value)}
                 style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #374151', background: '#1f2937', color: '#fff', fontSize: '13px' }}
               >
-                <option value="ALL">Все кластеры ({keywordsList.length})</option>
+                <option value="ALL">Все кластеры</option>
                 {availableClusters.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -1040,6 +1068,7 @@ export default function DashboardPage() {
                 <th style={{ padding: '12px 16px' }}>Ключевая фраза</th>
                 <th style={{ padding: '12px 16px' }}>Частотность (показов/мес)</th>
                 <th style={{ padding: '12px 16px' }}>Сложность</th>
+                <th style={{ padding: '12px 16px' }}>Сайт / Домен</th>
                 <th style={{ padding: '12px 16px' }}>Кластер</th>
                 <th style={{ padding: '12px 16px' }}>Приоритет (Клик для смены)</th>
                 <th style={{ padding: '12px 16px', textAlign: 'right' }}>Действия</th>
@@ -1064,6 +1093,11 @@ export default function DashboardPage() {
                     <td style={{ padding: '12px 16px' }}>
                       <span style={{ background: kw.diff > 35 ? '#7f1d1d' : '#064e3b', color: kw.diff > 35 ? '#fca5a5' : '#6ee7b7', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
                         {kw.diff} / 100
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontSize: '12px', color: '#38bdf8', fontFamily: 'monospace' }}>
+                      <span style={{ background: '#0c4a6e', color: '#7dd3fc', padding: '3px 8px', borderRadius: '4px', border: '1px solid #0284c7' }}>
+                        🌐 {kw.domain}
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', color: '#a855f7', fontSize: '13px' }}>{kw.cluster}</td>
