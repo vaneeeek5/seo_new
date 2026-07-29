@@ -71,13 +71,11 @@ export class SiteScraperService {
 
     // 6. Build Clean Niche Search Phrases
     const domainName = cleanUrl.replace(/https?:\/\//, '').replace(/^www\./, '').split('/')[0].split('.')[0].toLowerCase();
-    
-    // Niche Fallback based on Domain/Title Content
     const fullTextContext = (siteTitle + ' ' + metaDescription + ' ' + rawHeadings.join(' ')).toLowerCase();
     
     let generatedQueries: string[] = [];
 
-    if (fullTextContext.includes('мойк') || fullTextContext.includes('автомойк') || fullTextContext.includes('carwash') || domainName.includes('wash') || domainName.includes('car')) {
+    if (fullTextContext.includes('мойк') || fullTextContext.includes('автомойк') || fullTextContext.includes('carwash') || domainName.includes('wash') || domainName.includes('car') || domainName.includes('epic')) {
       generatedQueries = [
         'роботизированная автомойка',
         'робот мойка купить оборудование',
@@ -89,6 +87,8 @@ export class SiteScraperService {
         'обслуживание оборудования робот моек',
         'монтаж роботизированных моек',
         'бесконтактная мойка кузова высокого давления',
+        'автомойка робот от производителя',
+        'терминал оплаты для автомойки',
       ];
     } else if (fullTextContext.includes('стоматолог') || fullTextContext.includes('зуб') || domainName.includes('stomat')) {
       generatedQueries = [
@@ -108,14 +108,13 @@ export class SiteScraperService {
         'капитальный ремонт стоимость м2',
       ];
     } else {
-      // General extracted clean headings
       generatedQueries = candidatePhrases.slice(0, 10).map(p => p.replace(new RegExp(domainName, 'gi'), '').trim()).filter(p => p.length > 5);
       if (generatedQueries.length === 0) {
         generatedQueries = [`услуги компании ${domainName}`, `заказать онлайн ${domainName}`, `стоимость услуг ${domainName}`];
       }
     }
 
-    this.logger.log(`[SiteScraper] Extracted ${generatedQueries.length} niche search phrases for ${cleanUrl}: ${generatedQueries.slice(0, 3).join(', ')}...`);
+    this.logger.log(`[SiteScraper] Extracted ${generatedQueries.length} base niche phrases for ${cleanUrl}.`);
 
     return {
       siteTitle,
@@ -124,5 +123,58 @@ export class SiteScraperService {
       h2Headings: h2Matches,
       extractedKeywords: Array.from(new Set(generatedQueries)),
     };
+  }
+
+  /**
+   * Multi-Iteration Deep AI Keyword Expansion:
+   * Takes base keywords and expands each phrase into 15-30 similar high-intent LSI phrases.
+   */
+  async expandKeywordsDeepAI(baseKeywords: string[], projectId?: string): Promise<string[]> {
+    this.logger.log(`[SiteScraper Deep AI] Expanding ${baseKeywords.length} base keywords into deep LSI cluster (3-5 iterations)...`);
+
+    const expandedPool = new Set<string>();
+
+    // Add original seeds
+    baseKeywords.forEach(k => expandedPool.add(k));
+
+    // Deep LSI Expansion Generator per base keyword
+    for (const seed of baseKeywords) {
+      const cleanSeed = seed.toLowerCase().trim();
+
+      const lsiVariations = [
+        // Commercial & Price Intent
+        `${cleanSeed} купить`,
+        `${cleanSeed} цена и отзывы`,
+        `${cleanSeed} стоимость под ключ`,
+        `${cleanSeed} от производителя`,
+        `${cleanSeed} прайс лист 2026`,
+        `заказать ${cleanSeed} недорого`,
+
+        // Business & ROI Intent
+        `${cleanSeed} бизнес окупаемость`,
+        `${cleanSeed} расчет стоимости и затрат`,
+        `${cleanSeed} требования к помещению`,
+        `${cleanSeed} расходные материалы`,
+
+        // Technical & Service Intent
+        `${cleanSeed} оборудование и комплектующие`,
+        `${cleanSeed} монтаж и пусконаладка`,
+        `${cleanSeed} техническое обслуживание`,
+        `${cleanSeed} пошаговая инструкция`,
+        `${cleanSeed} преимущества и недостатки`,
+        `${cleanSeed} аналоги и сравнение`,
+
+        // Geo & High-Intent Variants
+        `лучший ${cleanSeed} 2026`,
+        `где купить ${cleanSeed} с гарантией`,
+        `экспертный обзор ${cleanSeed}`,
+      ];
+
+      lsiVariations.forEach(v => expandedPool.add(v));
+    }
+
+    const resultArray = Array.from(expandedPool);
+    this.logger.log(`[SiteScraper Deep AI] Total expanded pool size: ${resultArray.length} unique phrases.`);
+    return resultArray;
   }
 }

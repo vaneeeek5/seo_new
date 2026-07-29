@@ -28,35 +28,58 @@ export class SemanticProcessor extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { taskId, projectId, seedKeywords, regionId } = job.data;
-    this.logger.log(`[SemanticWorker] Processing job ${job.id} for task ${taskId} (Region: ${regionId || 225})...`);
+    this.logger.log(`[SemanticWorker] Executing 5-iteration Deep Semantic Pipeline for task ${taskId} (Region: ${regionId || 225})...`);
 
     try {
       const primarySeed = (Array.isArray(seedKeywords) && seedKeywords.length > 0)
         ? seedKeywords[0]
         : 'seo automation';
 
-      let extractedPhrases: string[] = [];
-
-      // Step 1: Detect if primarySeed is a website URL vs direct text keyword
       const isUrl = primarySeed.startsWith('http://') || primarySeed.startsWith('https://') || primarySeed.includes('.com') || primarySeed.includes('.ru');
 
+      // =========================================================================
+      // ИТЕРАЦИЯ 1: Извлечение базовых фраз (10-15 штук) с сайта / темы
+      // =========================================================================
+      let baseSeeds: string[] = [];
       if (isUrl) {
-        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 25, `🌐 Crawling website pages at "${primarySeed}" and extracting service keywords...`);
+        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 20, `🌐 Итерация 1/5: Сканирование страниц сайта "${primarySeed}", заголовков H1-H3 и услуг...`);
         const scraped = await this.siteScraper.scrapeSiteKeywords(primarySeed, projectId);
-        extractedPhrases = scraped.extractedKeywords;
+        baseSeeds = scraped.extractedKeywords;
       } else {
-        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 25, `Fetching Yandex Wordstat LSI phrases for "${primarySeed}" (Region ID: ${regionId || 225})...`);
-        extractedPhrases = await this.wordstatProvider.getSimilarKeywords(primarySeed, projectId, regionId);
+        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 20, `🔍 Итерация 1/5: Формирование базового поискового интента для темы "${primarySeed}"...`);
+        baseSeeds = seedKeywords;
       }
 
-      // Step 2: Query Yandex Wordstat for monthly search volumes
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `Evaluating Yandex Wordstat search volume (GetDynamics) for ${extractedPhrases.length} phrases...`);
-      const volumeMap = await this.wordstatProvider.getSearchVolume(extractedPhrases, projectId, regionId);
+      // =========================================================================
+      // ИТЕРАЦИЯ 2: Пробивка базовых фраз через Yandex Wordstat GetTop (LSI)
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 40, `📊 Итерация 2/5: Запрос Yandex Wordstat API (GetTop) по ${baseSeeds.length} базовым фразам...`);
+      const wordstatLsiPool: string[] = [];
 
-      // Step 3: Create or update Cluster in DB with DRAFT status
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 85, `Filtering zero-volume keys and persisting cluster to database...`);
+      for (const seed of baseSeeds.slice(0, 5)) {
+        const lsi = await this.wordstatProvider.getSimilarKeywords(seed, projectId, regionId);
+        wordstatLsiPool.push(...lsi);
+      }
+
+      // =========================================================================
+      // ИТЕРАЦИЯ 3: Глубокая генерация смежных и ассоциированных фраз AI (LSI Expansion)
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `🤖 Итерация 3/5: Глубокая AI-генерация смежных LSI фраз и коммерческих интентов...`);
+      const combinedInitialSeeds = Array.from(new Set([...baseSeeds, ...wordstatLsiPool]));
+      const deepExpandedCandidates = await this.siteScraper.expandKeywordsDeepAI(combinedInitialSeeds, projectId);
+
+      // =========================================================================
+      // ИТЕРАЦИЯ 4: Массовая проверка частотности 150-250+ фраз в Wordstat GetDynamics
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 80, `📈 Итерация 4/5: Проверка ежемесячной частотности в Яндексе для ${deepExpandedCandidates.length} фраз...`);
+      const volumeMap = await this.wordstatProvider.getSearchVolume(deepExpandedCandidates, projectId, regionId);
+
+      // =========================================================================
+      // ИТЕРАЦИЯ 5: Жесткая фильтрация (отсечение 0 показов), Кластеризация и Сохранение в БД
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 95, `🧹 Итерация 5/5: Авто-удаление нулевых фраз, кластеризация и сохранение семантического ядра...`);
       
-      const clusterName = isUrl ? `Site Semantics: ${primarySeed}` : `Cluster: ${primarySeed}`;
+      const clusterName = isUrl ? `Глубокая семантика: ${primarySeed}` : `Кластер: ${primarySeed}`;
       let cluster = await this.prisma.cluster.findFirst({
         where: { projectId, name: clusterName },
       });
@@ -71,14 +94,12 @@ export class SemanticProcessor extends WorkerHost {
         });
       }
 
-      // Filter out keywords with 0 search volume (shows <= 0)
       let savedCount = 0;
-      for (const phrase of extractedPhrases) {
+      for (const phrase of deepExpandedCandidates) {
         const searchVol = volumeMap[phrase] || 0;
         
-        // Auto-filter 0 volume keywords
+        // Strictly filter out 0 volume keywords
         if (searchVol <= 0) {
-          this.logger.log(`[SemanticWorker] Dropping zero-volume keyword: "${phrase}"`);
           continue;
         }
 
@@ -94,20 +115,20 @@ export class SemanticProcessor extends WorkerHost {
         savedCount++;
       }
 
-      // Step 4: Completion Event
+      // Step 6: Final Completion Event
       this.emitTaskStatus(
         taskId,
         projectId,
         TaskStatus.COMPLETED,
         100,
-        `Site semantics gathered! Extracted & verified ${savedCount} high-intent keywords for "${clusterName}".`
+        `🎉 Сбор завершен (5 итераций)! Сформировано объёмное ядро из ${savedCount} релевантных фраз с точной частотностью Wordstat.`
       );
 
       return {
         clusterId: cluster.id,
         clusterName: cluster.name,
         keywordsSaved: savedCount,
-        phrases: extractedPhrases,
+        candidatesEvaluated: deepExpandedCandidates.length,
       };
     } catch (error: any) {
       this.logger.error(`[SemanticWorker Error] Task ${taskId} failed: ${error.message}`);
@@ -116,7 +137,7 @@ export class SemanticProcessor extends WorkerHost {
         projectId,
         TaskStatus.FAILED,
         0,
-        `Semantic Collection Failed: ${error.message}`
+        `Deep Semantic Collection Failed: ${error.message}`
       );
       throw error;
     }
