@@ -5,8 +5,10 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DomainEventTypes, TaskStatusChangedEvent, TaskStatus, TaskType } from '@seo-saas/shared';
 import { YandexWordstatProvider } from '../providers/yandex-wordstat.provider';
 import { SiteScraperService } from '../services/site-scraper.service';
+import { SearchSuggestProvider } from '../providers/search-suggest.provider';
+import { IntentNegativeFilterService } from '../services/intent-negative-filter.service';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { ContentStatus } from '@prisma/client';
+import { ContentStatus, KeywordIntent } from '@prisma/client';
 
 @Processor('semantic-queue', {
   limiter: {
@@ -21,6 +23,8 @@ export class SemanticProcessor extends WorkerHost {
     private readonly eventEmitter: EventEmitter2,
     private readonly wordstatProvider: YandexWordstatProvider,
     private readonly siteScraper: SiteScraperService,
+    private readonly suggestProvider: SearchSuggestProvider,
+    private readonly intentFilterService: IntentNegativeFilterService,
     private readonly prisma: PrismaService,
   ) {
     super();
@@ -28,7 +32,7 @@ export class SemanticProcessor extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { taskId, projectId, seedKeywords, regionId } = job.data;
-    this.logger.log(`[SemanticWorker] Executing 5-iteration Dual-Column Wordstat Pipeline for task ${taskId} (Region: ${regionId || 225})...`);
+    this.logger.log(`[SemanticWorker] Executing 7-step Enterprise Super-Pipeline for task ${taskId} (Region: ${regionId || 225})...`);
 
     try {
       const primarySeed = (Array.isArray(seedKeywords) && seedKeywords.length > 0)
@@ -38,52 +42,82 @@ export class SemanticProcessor extends WorkerHost {
       const isUrl = primarySeed.startsWith('http://') || primarySeed.startsWith('https://') || primarySeed.includes('.com') || primarySeed.includes('.ru');
 
       // =========================================================================
-      // ИТЕРАЦИЯ 1: Извлечение базовых фраз (10-15 штук) с сайта / темы
+      // ШАГ 1 (15%): Сканирование сайта / Определение базовых интентов
       // =========================================================================
       let baseSeeds: string[] = [];
       if (isUrl) {
-        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 20, `🌐 Итерация 1/5: Сканирование страниц сайта "${primarySeed}", заголовков H1-H3 и услуг...`);
+        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 15, `🌐 Шаг 1/7 [Agent-Core]: Сканирование страниц сайта "${primarySeed}", H1-H3 и структуры услуг...`);
         const scraped = await this.siteScraper.scrapeSiteKeywords(primarySeed, projectId);
         baseSeeds = scraped.extractedKeywords;
       } else {
-        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 20, `🔍 Итерация 1/5: Формирование базового поискового интента для темы "${primarySeed}"...`);
+        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 15, `🔍 Шаг 1/7 [Agent-Core]: Формирование первичного семантического инвентаря для "${primarySeed}"...`);
         baseSeeds = seedKeywords;
       }
 
       // =========================================================================
-      // ИТЕРАЦИЯ 2: ДВУХКОЛОНОЧНЫЙ парсинг Вордстата (Левая колонка "Запросы со словами" + Правая колонка "Похожие запросы")
+      // ШАГ 2 (30%): Двухколоночный парсинг Яндекс Wordstat (Левая + Правая колонка)
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 40, `📊 Итерация 2/5: Парсинг Wordstat: Сбор Левой колонки ("Запросы со словами") и Правой колонки ("Похожие запросы")...`);
-      const wordstatLeftColumn: string[] = [];
-      const wordstatRightColumn: string[] = [];
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 30, `📊 Шаг 2/7 [Wordstat]: Сбор Левой колонки ("Запросы со словами") и Правой колонки ("Похожие запросы")...`);
+      const wordstatPool: Array<{ phrase: string; source: string }> = [];
 
       for (const seed of baseSeeds.slice(0, 5)) {
         const dualResult = await this.wordstatProvider.getSimilarKeywordsWithColumns(seed, projectId, regionId);
-        wordstatLeftColumn.push(...dualResult.leftColumnSubQueries);
-        wordstatRightColumn.push(...dualResult.rightColumnSimilarQueries);
+        dualResult.leftColumnSubQueries.forEach(p => wordstatPool.push({ phrase: p, source: 'WORDSTAT' }));
+        dualResult.rightColumnSimilarQueries.forEach(p => wordstatPool.push({ phrase: p, source: 'WORDSTAT' }));
       }
 
-      this.logger.log(`[Wordstat Dual Column] Gathered ${wordstatLeftColumn.length} sub-queries (left column) & ${wordstatRightColumn.length} similar queries (right column).`);
+      // =========================================================================
+      // ШАГ 3 (45%): Модуль поисковых подсказок (Suggest Provider Yandex & Google)
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 45, `💡 Шаг 3/7 [Agent-Core]: Сбор поисковых подсказок Yandex & Google (буквенный перебор A-Z, А-Я)...`);
+      const minedSuggests = await this.suggestProvider.collectLongTailSuggests(baseSeeds);
+      const suggestPool = minedSuggests.map(p => ({ phrase: p, source: 'SUGGEST' }));
 
       // =========================================================================
-      // ИТЕРАЦИЯ 3: Глубокая генерация смежных и ассоциированных фраз AI (LSI Expansion)
+      // ШАГ 4 (60%): AI LSI & Niche Expansion
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `🤖 Итерация 3/5: Глубокая AI-генерация смежных LSI фраз на основе похожих запросов Wordstat...`);
-      const combinedInitialSeeds = Array.from(new Set([...baseSeeds, ...wordstatLeftColumn, ...wordstatRightColumn]));
-      const deepExpandedCandidates = await this.siteScraper.expandKeywordsDeepAI(combinedInitialSeeds, projectId);
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `🤖 Шаг 4/7 [Agent-AI]: Глубокое AI-расширение смежных LSI фраз и коммерческих вариантов...`);
+      const rawCandidates = Array.from(new Set([
+        ...baseSeeds,
+        ...wordstatPool.map(w => w.phrase),
+        ...suggestPool.map(s => s.phrase),
+      ]));
+
+      const expandedPhrases = await this.siteScraper.expandKeywordsDeepAI(rawCandidates, projectId);
+      const aiPool = expandedPhrases.map(p => ({ phrase: p, source: 'AI' }));
+
+      // Map phrases to their source
+      const phraseSourceMap = new Map<string, string>();
+      baseSeeds.forEach(p => phraseSourceMap.set(p, 'COMPETITOR'));
+      wordstatPool.forEach(w => phraseSourceMap.set(w.phrase, 'WORDSTAT'));
+      suggestPool.forEach(s => phraseSourceMap.set(s.phrase, 'SUGGEST'));
+      aiPool.forEach(a => {
+        if (!phraseSourceMap.has(a.phrase)) {
+          phraseSourceMap.set(a.phrase, 'AI');
+        }
+      });
+
+      const uniquePhrases = Array.from(phraseSourceMap.keys());
 
       // =========================================================================
-      // ИТЕРАЦИЯ 4: Массовая проверка частотности 150-250+ фраз в Wordstat GetDynamics
+      // ШАГ 5 (75%): Фильтр Минус-слов и Классификатор Интентов (Intent & Negative Filter)
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 80, `📈 Итерация 4/5: Проверка ежемесячной частотности в Яндексе для ${deepExpandedCandidates.length} фраз...`);
-      const volumeMap = await this.wordstatProvider.getSearchVolume(deepExpandedCandidates, projectId, regionId);
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 75, `🧹 Шаг 5/7 [Agent-AI]: Очистка от минус-слов (мусора) и классификация интента (Commercial/Info/Nav)...`);
+      const cleanPhrases = this.intentFilterService.filterNegativeWords(uniquePhrases);
+      const classifiedCandidates = this.intentFilterService.batchClassify(cleanPhrases);
 
       // =========================================================================
-      // ИТЕРАЦИЯ 5: Жесткая фильтрация (отсечение 0 показов), Кластеризация и Сохранение в БД
+      // ШАГ 6 (90%): Проверка частотности всех кандидатов по Wordstat GetDynamics
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 95, `🧹 Итерация 5/5: Авто-удаление нулевых фраз, кластеризация и сохранение семантического ядра...`);
-      
-      const clusterName = isUrl ? `Глубокая семантика: ${primarySeed}` : `Кластер: ${primarySeed}`;
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 90, `📈 Шаг 6/7 [Wordstat]: Проверка точной ежемесячной частотности в Яндексе для ${classifiedCandidates.length} фраз...`);
+      const volumeMap = await this.wordstatProvider.getSearchVolume(classifiedCandidates.map(c => c.phrase), projectId, regionId);
+
+      // =========================================================================
+      // ШАГ 7 (100%): Отсечение 0-показов, Кластеризация и Сохранение в БД с разметкой
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 98, `💾 Шаг 7/7 [Agent-Core]: Сохранение семантического ядра с разметкой Интентов и Источников...`);
+
+      const clusterName = isUrl ? `Семантическое ядро: ${primarySeed}` : `Кластер: ${primarySeed}`;
       let cluster = await this.prisma.cluster.findFirst({
         where: { projectId, name: clusterName },
       });
@@ -99,40 +133,42 @@ export class SemanticProcessor extends WorkerHost {
       }
 
       let savedCount = 0;
-      for (const phrase of deepExpandedCandidates) {
-        const searchVol = volumeMap[phrase] || 0;
-        
-        // Strictly filter out 0 volume keywords
-        if (searchVol <= 0) {
-          continue;
-        }
+      for (const item of classifiedCandidates) {
+        const searchVol = volumeMap[item.phrase] || 0;
+
+        // Auto-drop 0 volume keywords
+        if (searchVol <= 0) continue;
+
+        const source = phraseSourceMap.get(item.phrase) || 'WORDSTAT';
 
         await this.prisma.keyword.create({
           data: {
             projectId,
-            term: phrase,
+            term: item.phrase,
             searchVol,
             difficulty: Math.min(100, Math.floor(searchVol / 150)),
+            intent: item.intent,
+            source,
             clusterId: cluster.id,
           },
         });
         savedCount++;
       }
 
-      // Step 6: Final Completion Event
+      // Final Completion Event
       this.emitTaskStatus(
         taskId,
         projectId,
         TaskStatus.COMPLETED,
         100,
-        `🎉 Сбор завершен! Собраны точные вложенные ключи и похожие запросы Wordstat (${savedCount} фраз с частотностью).`
+        `🎉 7-Step Super-Pipeline Завершен! Собрано ${savedCount} целевых ключей с разметкой Интента (Коммерческий/Инфо/Нав) и Источника.`
       );
 
       return {
         clusterId: cluster.id,
         clusterName: cluster.name,
         keywordsSaved: savedCount,
-        candidatesEvaluated: deepExpandedCandidates.length,
+        candidatesEvaluated: classifiedCandidates.length,
       };
     } catch (error: any) {
       this.logger.error(`[SemanticWorker Error] Task ${taskId} failed: ${error.message}`);
@@ -141,7 +177,7 @@ export class SemanticProcessor extends WorkerHost {
         projectId,
         TaskStatus.FAILED,
         0,
-        `Deep Semantic Collection Failed: ${error.message}`
+        `Super-Pipeline Semantic Collection Failed: ${error.message}`
       );
       throw error;
     }

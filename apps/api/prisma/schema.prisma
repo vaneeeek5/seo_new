@@ -53,6 +53,12 @@ enum IntegrationProvider {
   YANDEX_WORDSTAT
 }
 
+enum KeywordIntent {
+  COMMERCIAL
+  INFORMATIONAL
+  NAVIGATIONAL
+}
+
 model Organization {
   id           String                  @id @default(uuid())
   name         String
@@ -161,15 +167,17 @@ model Task {
 }
 
 model Keyword {
-  id         String   @id @default(uuid())
+  id         String         @id @default(uuid())
   projectId  String
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   term       String
-  searchVol  Int?     @default(0)
-  difficulty Int?     @default(0)
+  searchVol  Int?           @default(0)
+  difficulty Int?           @default(0)
+  intent     KeywordIntent? @default(COMMERCIAL)
+  source     String?        @default("WORDSTAT")
   clusterId  String?
-  cluster    Cluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now())
+  cluster    Cluster?       @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  createdAt  DateTime       @default(now())
 
   @@map("keywords")
 }

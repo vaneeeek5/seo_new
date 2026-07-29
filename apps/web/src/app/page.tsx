@@ -231,13 +231,13 @@ export default function DashboardPage() {
   const [sortByVol, setSortByVol] = useState<'desc' | 'asc'>('desc');
   const [filterDomain, setFilterDomain] = useState<string>('ALL');
   const [filterCluster, setFilterCluster] = useState<string>('ALL');
-  const [keywordsList, setKeywordsList] = useState<Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }>>([
-    { id: 'kw_1', term: 'роботизированная автомойка', vol: 4800, diff: 34, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', priority: 'HIGH' },
-    { id: 'kw_2', term: 'робот мойка купить оборудование', vol: 3200, diff: 42, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', priority: 'HIGH' },
-    { id: 'kw_3', term: 'бесконтактная робот автомойка цена', vol: 1920, diff: 28, cluster: 'Цены и окупаемость', domain: 'epicarwash.com', priority: 'HIGH' },
-    { id: 'kw_4', term: 'роботизированная мойка под ключ', vol: 1450, diff: 22, cluster: 'Цены и окупаемость', domain: 'epicarwash.com', priority: 'MEDIUM' },
-    { id: 'kw_5', term: 'seo автоматизация продвижения', vol: 3800, diff: 30, cluster: 'AI Маркетинг', domain: 'seo-saas.com', priority: 'HIGH' },
-    { id: 'kw_6', term: 'автоматический поиск семантики вордстат', vol: 2400, diff: 26, cluster: 'AI Маркетинг', domain: 'seo-saas.com', priority: 'HIGH' },
+  const [keywordsList, setKeywordsList] = useState<Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; intent: 'COMMERCIAL' | 'INFORMATIONAL' | 'NAVIGATIONAL'; source: 'WORDSTAT' | 'SUGGEST' | 'COMPETITOR' | 'AI'; priority: 'HIGH' | 'MEDIUM' | 'LOW' }>>([
+    { id: 'kw_1', term: 'роботизированная автомойка', vol: 4800, diff: 34, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'COMPETITOR', priority: 'HIGH' },
+    { id: 'kw_2', term: 'робот мойка купить оборудование', vol: 3200, diff: 42, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'WORDSTAT', priority: 'HIGH' },
+    { id: 'kw_3', term: 'бесконтактная робот автомойка цена', vol: 1920, diff: 28, cluster: 'Цены и окупаемость', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'WORDSTAT', priority: 'HIGH' },
+    { id: 'kw_4', term: 'конструкторская документация роботизированной автомойки', vol: 1450, diff: 22, cluster: 'Запросы со словами', domain: 'epicarwash.com', intent: 'INFORMATIONAL', source: 'WORDSTAT', priority: 'MEDIUM' },
+    { id: 'kw_5', term: 'роботизированная автомойка рядом в москве', vol: 1240, diff: 19, cluster: 'Поисковые подсказки', domain: 'epicarwash.com', intent: 'NAVIGATIONAL', source: 'SUGGEST', priority: 'HIGH' },
+    { id: 'kw_6', term: 'официальный сайт epicarwash', vol: 980, diff: 15, cluster: 'Бренд', domain: 'epicarwash.com', intent: 'NAVIGATIONAL', source: 'COMPETITOR', priority: 'MEDIUM' },
   ]);
 
   // Content Generation State (Step 3 & 4: Edit/Preview, Multi-stage generation UI)
@@ -474,7 +474,7 @@ export default function DashboardPage() {
       await res.json();
 
       // Build clean human keywords list assigned to current targetDomainName
-      const newKeywords: Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
+      const newKeywords: Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; intent: 'COMMERCIAL' | 'INFORMATIONAL' | 'NAVIGATIONAL'; source: 'WORDSTAT' | 'SUGGEST' | 'COMPETITOR' | 'AI'; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
 
       // 1. Process Scraped Site Keywords (Left Column: Searches with Words + Right Column: Similar Queries)
       nicheData.forEach((item, idx) => {
@@ -486,19 +486,24 @@ export default function DashboardPage() {
           diff: Math.floor(Math.random() * 35) + 15,
           cluster: 'Оборудование и услуги',
           domain: targetDomainName,
+          intent: 'COMMERCIAL',
+          source: 'COMPETITOR',
           priority: 'HIGH',
         });
 
         // Левая колонка Вордстата: Запросы со словами (Точные вложенные фреймы)
         item.leftColumn.forEach((leftKw, lidx) => {
           const subVol = Math.floor(Math.random() * 1800) + 210;
+          const isComm = leftKw.includes('цена') || leftKw.includes('купить') || leftKw.includes('под ключ');
           newKeywords.push({
             id: `kw_left_${Date.now()}_${idx}_${lidx}`,
             term: leftKw,
             vol: subVol,
             diff: Math.floor(Math.random() * 25) + 10,
-            cluster: leftKw.includes('цена') || leftKw.includes('купить') ? 'Цены и окупаемость' : 'Запросы со словами (Вордстат)',
+            cluster: isComm ? 'Цены и окупаемость' : 'Запросы со словами (Вордстат)',
             domain: targetDomainName,
+            intent: isComm ? 'COMMERCIAL' : 'INFORMATIONAL',
+            source: 'WORDSTAT',
             priority: subVol > 1000 ? 'HIGH' : 'MEDIUM',
           });
         });
@@ -506,6 +511,7 @@ export default function DashboardPage() {
         // Правая колонка Вордстата: Похожие и ассоциированные запросы
         item.rightColumn.forEach((rightKw, ridx) => {
           const simVol = Math.floor(Math.random() * 2400) + 350;
+          const isComm = rightKw.includes('цена') || rightKw.includes('оборудование') || rightKw.includes('терминал');
           newKeywords.push({
             id: `kw_right_${Date.now()}_${idx}_${ridx}`,
             term: rightKw,
@@ -513,6 +519,8 @@ export default function DashboardPage() {
             diff: Math.floor(Math.random() * 30) + 15,
             cluster: 'Похожие запросы (Вордстат)',
             domain: targetDomainName,
+            intent: isComm ? 'COMMERCIAL' : 'INFORMATIONAL',
+            source: 'WORDSTAT',
             priority: simVol > 1200 ? 'HIGH' : 'MEDIUM',
           });
         });
@@ -528,6 +536,8 @@ export default function DashboardPage() {
           diff: Math.floor(Math.random() * 40) + 15,
           cluster: 'Заданные темы сайта',
           domain: targetDomainName,
+          intent: 'COMMERCIAL',
+          source: 'COMPETITOR',
           priority: 'HIGH',
         });
 
@@ -539,17 +549,22 @@ export default function DashboardPage() {
           `стоимость ${top} 2026`,
           `лучший ${top} рекомендации`,
           `монтаж и обслуживание ${top}`,
+          `${top} рядом в москве`,
         ];
 
         customLsi.forEach((clsi, clidx) => {
           const clsiVol = Math.floor(Math.random() * 1900) + 240;
+          const isComm = clsi.includes('цена') || clsi.includes('купить') || clsi.includes('стоимость');
+          const isNav = clsi.includes('рядом');
           newKeywords.push({
             id: `kw_custom_${Date.now()}_${tidx}_lsi_${clidx}`,
             term: clsi,
             vol: clsiVol,
             diff: Math.floor(Math.random() * 28) + 12,
-            cluster: clsi.includes('цена') || clsi.includes('купить') || clsi.includes('стоимость') ? 'Цены и окупаемость' : 'Заданные темы сайта',
+            cluster: isComm ? 'Цены и окупаемость' : 'Заданные темы сайта',
             domain: targetDomainName,
+            intent: isNav ? 'NAVIGATIONAL' : isComm ? 'COMMERCIAL' : 'INFORMATIONAL',
+            source: isNav ? 'SUGGEST' : 'AI',
             priority: clsiVol > 1000 ? 'HIGH' : 'MEDIUM',
           });
         });
@@ -1174,6 +1189,8 @@ export default function DashboardPage() {
             <thead>
               <tr style={{ background: '#111827', color: '#9ca3af', textAlign: 'left', fontSize: '13px' }}>
                 <th style={{ padding: '12px 16px' }}>Ключевая фраза</th>
+                <th style={{ padding: '12px 16px' }}>Интент (AI)</th>
+                <th style={{ padding: '12px 16px' }}>Источник</th>
                 <th style={{ padding: '12px 16px' }}>Частотность (показов/мес)</th>
                 <th style={{ padding: '12px 16px' }}>Сложность</th>
                 <th style={{ padding: '12px 16px' }}>Сайт / Домен</th>
@@ -1190,6 +1207,26 @@ export default function DashboardPage() {
                 return (
                   <tr key={kw.id} style={{ borderBottom: '1px solid #374151', color: '#e5e7eb', fontSize: '14px' }}>
                     <td style={{ padding: '12px 16px', fontWeight: 600 }}>{kw.term}</td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {kw.intent === 'COMMERCIAL' ? (
+                        <span style={{ background: '#064e3b', color: '#6ee7b7', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700 }}>🛒 Коммерческий</span>
+                      ) : kw.intent === 'NAVIGATIONAL' ? (
+                        <span style={{ background: '#1e3a8a', color: '#93c5fd', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700 }}>🧭 Навигационный</span>
+                      ) : (
+                        <span style={{ background: '#312e81', color: '#c7d2fe', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700 }}>ℹ️ Инфо</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {kw.source === 'SUGGEST' ? (
+                        <span style={{ background: '#701a75', color: '#f5d0fe', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>💡 Подсказка</span>
+                      ) : kw.source === 'COMPETITOR' ? (
+                        <span style={{ background: '#0c4a6e', color: '#7dd3fc', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>🌐 Конкурент</span>
+                      ) : kw.source === 'AI' ? (
+                        <span style={{ background: '#581c87', color: '#e9d5ff', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>🤖 AI LSI</span>
+                      ) : (
+                        <span style={{ background: '#14532d', color: '#bbf7d0', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>📊 Вордстат</span>
+                      )}
+                    </td>
                     <td style={{ padding: '12px 16px', color: '#38bdf8' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <span style={{ fontWeight: 700, minWidth: '60px' }}>{kw.vol.toLocaleString()}</span>
