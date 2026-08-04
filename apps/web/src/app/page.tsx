@@ -207,11 +207,13 @@ export default function DashboardPage() {
   const [articlesPerDay, setArticlesPerDay] = useState<number>(2);
   const [articlesPerWeek, setArticlesPerWeek] = useState<number>(10);
 
-  // Project State
+  // Project State & Active Global Project Selector
   const [projectName, setProjectName] = useState('');
   const [domain, setDomain] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('proj_demo_1');
   const [createdProjects, setCreatedProjects] = useState<Array<{ id: string; name: string; domain: string; date: string }>>([
-    { id: 'proj_demo_1', name: 'SEO SaaS Platform', domain: 'seo-saas.com', date: new Date().toLocaleDateString() }
+    { id: 'proj_demo_1', name: 'SEO SaaS Platform', domain: 'seo-saas.com', date: new Date().toLocaleDateString() },
+    { id: 'proj_demo_epic', name: 'Epic Car Wash', domain: 'epicarwash.com', date: new Date().toLocaleDateString() }
   ]);
 
   // Integrations State (Step 1: Delete support)
@@ -301,7 +303,7 @@ export default function DashboardPage() {
   // ⚡ 100% AUTOMATED AUTO-PILOT PIPELINE
   const runFullAutoPilot = async () => {
     setAutoPilotRunning(true);
-    addLog(`🚀 [Автопилот] Запущен 100% автопилот продвижения (Лимит: ${articlesPerDay} статей/день, ${articlesPerWeek} статей/неделю)...`);
+    addLog(`🚀 [Автопилот] Запущен 100% автопилот продвижения для проекта (ID: ${selectedProjectId}) (Лимит: ${articlesPerDay} статей/день, ${articlesPerWeek} статей/неделю)...`);
 
     try {
       const baseUrl = getApiBaseUrl();
@@ -309,7 +311,7 @@ export default function DashboardPage() {
       const decRes = await fetch(`${baseUrl}/decision/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: 'proj_demo_1' })
+        body: JSON.stringify({ projectId: selectedProjectId })
       });
       const decData = await decRes.json();
       setDecisionResult(decData);
@@ -326,14 +328,14 @@ export default function DashboardPage() {
       await fetch(`${baseUrl}/semantics/collect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: 'proj_demo_1', seedKeywords: ['роботизированная автомойка', 'робот мойка купить'], regionId: 225 })
+        body: JSON.stringify({ projectId: selectedProjectId, seedKeywords: ['роботизированная автомойка', 'робот мойка купить'], regionId: 225 })
       });
 
       addLog(`✍️ [AI-Агент] Шаг 3: Многоэтапное написание статьи по теме ниши...`);
       const genRes = await fetch(`${baseUrl}/content/articles/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: 'proj_demo_1', topic: selectedAutoTopic, primaryKeyword: 'роботизированная автомойка' })
+        body: JSON.stringify({ projectId: selectedProjectId, topic: selectedAutoTopic, primaryKeyword: 'роботизированная автомойка' })
       });
       await genRes.json();
 
@@ -427,6 +429,7 @@ export default function DashboardPage() {
   // Project Creation
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!projectName || !domain) return;
     try {
       const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/projects`, {
@@ -435,8 +438,11 @@ export default function DashboardPage() {
         body: JSON.stringify({ name: projectName, domain, organizationId: 'org_demo_1' })
       });
       const data = await res.json();
-      addLog(`[Команда] CreateProject -> ID: ${data.projectId}`);
-      setCreatedProjects(prev => [{ id: data.projectId || `proj_${Date.now()}`, name: projectName, domain, date: new Date().toLocaleDateString() }, ...prev]);
+      const newProjId = data.projectId || `proj_${Date.now()}`;
+      addLog(`[Команда] CreateProject -> Активный проект переключен на: ${projectName} (${domain})`);
+      const newProjObj = { id: newProjId, name: projectName, domain, date: new Date().toLocaleDateString() };
+      setCreatedProjects(prev => [newProjObj, ...prev]);
+      setSelectedProjectId(newProjId);
       setProjectName('');
       setDomain('');
     } catch (err: any) {
@@ -464,12 +470,12 @@ export default function DashboardPage() {
       const allSeeds = [...nicheData.map(n => n.seed), ...customTopics];
 
       const selectedRegionName = REGION_OPTIONS.find(r => r.id === selectedRegionId)?.name || 'Россия';
-      addLog(`[5 Итераций Сбора] Запуск конвейера для сайта ${targetDomainName} (Заданные темы: ${customTopics.length > 0 ? customTopics.join(', ') : 'Авто-определение'}, Регион: ${selectedRegionName})...`);
+      addLog(`[7 Итераций Сбора] Запуск Super-Pipeline для сайта ${targetDomainName} (Проект ID: ${selectedProjectId}, Заданные темы: ${customTopics.length > 0 ? customTopics.join(', ') : 'Авто-определение'}, Регион: ${selectedRegionName})...`);
 
       const res = await fetch(`${baseUrl}/semantics/collect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: 'proj_demo_1', seedKeywords: allSeeds, regionId: selectedRegionId })
+        body: JSON.stringify({ projectId: selectedProjectId, seedKeywords: allSeeds, regionId: selectedRegionId })
       });
       await res.json();
 
@@ -757,6 +763,28 @@ export default function DashboardPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* 📁 GLOBAL ACTIVE PROJECT SELECTOR */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#111827', padding: '6px 14px', borderRadius: '12px', border: '1px solid #0284c7' }}>
+            <span style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 600 }}>📁 Проект:</span>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => {
+                setSelectedProjectId(e.target.value);
+                const selectedP = createdProjects.find(p => p.id === e.target.value);
+                if (selectedP) {
+                  addLog(`[Переключение] Активный проект переключен на: ${selectedP.name} (${selectedP.domain})`);
+                }
+              }}
+              style={{ background: '#1f2937', color: '#fff', border: '1px solid #374151', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+            >
+              {createdProjects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.domain})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* ⚡ 100% AUTO-PILOT BUTTON */}
           <button
             onClick={runFullAutoPilot}
