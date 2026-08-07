@@ -29,6 +29,35 @@ export class CompetitorAnalysisProcessor {
   async analyzeCompetitors(primaryKeyword: string, clusterId?: string, projectId: string = 'proj_demo_1') {
     this.logger.log(`[CompetitorAnalysisProcessor] Analyzing TOP-10 competitors for "${primaryKeyword}"...`);
 
+    // 0. Feature Toggle Check: Check if competitorParsingEnabled is set to false in Yandex integration config
+    try {
+      const conn = await this.prisma.integrationConnection.findFirst({
+        where: {
+          projectId,
+          provider: { in: ['YANDEX_WORDSTAT', 'XMLSTOCK'] as any },
+          isActive: true,
+        },
+      });
+
+      const config = (conn?.config as any) || {};
+      if (config.competitorParsingEnabled === false) {
+        this.logger.warn(`[CompetitorAnalysis] Competitor Analysis (Парсинг ТОП-10) is DISABLED in Yandex integration feature toggles. Skipping SERP parsing.`);
+        return {
+          id: `disabled_${Date.now()}`,
+          topUrls: [],
+          lsiKeywords: [],
+          recommendedStructure: {
+            title: `Стандартная структура статьи без LSI-анализа`,
+            headings: [`1. Введение: ${primaryKeyword}`, `2. Основная часть`, `3. Заключение`],
+            outline: [],
+          },
+          competitorTexts: 'Анализ конкурентов отключен в тумблерах подключения Yandex API.',
+        };
+      }
+    } catch (err: any) {
+      this.logger.debug(`[CompetitorAnalysis Feature Toggle Check] ${err.message}`);
+    }
+
     // 1. Fetch TOP-50 SERP and filter for TOP-10 organic competitor sites
     const fullSerp = await this.yandexSearch.getSerp(primaryKeyword);
     const topCompetitors = fullSerp

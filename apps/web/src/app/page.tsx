@@ -538,6 +538,31 @@ export default function DashboardPage() {
     }
   };
 
+  // Toggle Feature Toggles for Connection Cards
+  const handleToggleConnectionFeature = async (connId: string, featureKey: string, newValue: boolean) => {
+    setConnectionsList(prev => prev.map(c => {
+      if (c.id === connId) {
+        const currentConfig = c.config || {};
+        const updatedConfig = { ...currentConfig, [featureKey]: newValue };
+        return { ...c, config: updatedConfig };
+      }
+      return c;
+    }));
+
+    addLog(`[Интеграции Тумблер] Переключен модуль ${featureKey} = ${newValue} для карточки ${connId}`);
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      await fetch(`${baseUrl}/integrations/${connId}/config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: { [featureKey]: newValue } })
+      });
+    } catch (err: any) {
+      addLog(`[Ошибка Тумблера] ${err.message}`);
+    }
+  };
+
   // Project Creation
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1119,6 +1144,34 @@ export default function DashboardPage() {
                 </div>
                 <div style={{ fontSize: '13px', color: '#9ca3af', fontFamily: 'monospace', background: '#111827', padding: '8px 12px', borderRadius: '6px', marginBottom: '14px' }}>
                   Ключ: <strong style={{ color: '#f3f4f6' }}>{conn.maskedKey}</strong>
+                </div>
+
+                {/* ⚙️ АКТИВНЫЕ МОДУЛИ (FEATURE TOGGLES) */}
+                <div style={{ background: '#111827', padding: '12px', borderRadius: '8px', marginBottom: '14px', border: '1px solid #374151' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>
+                    ⚙️ Активные модули (Feature Toggles):
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                      <span>📊 Съем позиций (Rank Tracker)</span>
+                      <input
+                        type="checkbox"
+                        checked={conn.config?.rankTrackerEnabled !== false}
+                        onChange={(e) => handleToggleConnectionFeature(conn.id, 'rankTrackerEnabled', e.target.checked)}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                      />
+                    </label>
+
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                      <span>🔍 Анализ конкурентов (LSI & Структура)</span>
+                      <input
+                        type="checkbox"
+                        checked={conn.config?.competitorParsingEnabled !== false}
+                        onChange={(e) => handleToggleConnectionFeature(conn.id, 'competitorParsingEnabled', e.target.checked)}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -1,14 +1,16 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param, Query, Delete } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Param, Query, Delete, Patch } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { SaveConnectionCommand, SaveConnectionDto } from './commands/save-connection.command';
 import { DeleteIntegrationCommand } from './commands/delete-integration.command';
 import { GetIntegrationsQuery } from './queries/get-integrations.query';
+import { IntegrationService } from './integration.service';
 
 @Controller('integrations')
 export class IntegrationController {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
+    private readonly integrationService: IntegrationService,
   ) {}
 
   @Post()
@@ -31,6 +33,11 @@ export class IntegrationController {
   @Get('list/:projectId')
   async listConnections(@Param('projectId') projectId: string) {
     return await this.queryBus.execute(new GetIntegrationsQuery(projectId));
+  }
+
+  @Patch(':id/config')
+  async updateConfig(@Param('id') id: string, @Body() body: { config: any }) {
+    return await this.integrationService.updateConfig(id, body.config);
   }
 
   @Delete(':id')

@@ -17,6 +17,25 @@ export class RankTrackerService {
   async trackProjectPositions(projectId: string): Promise<any[]> {
     this.logger.log(`[RankTrackerService] Running rank tracking for project ${projectId}...`);
 
+    // 1. Feature Toggle Check: Check if rankTrackerEnabled is set to false in Yandex integration config
+    try {
+      const conn = await this.prisma.integrationConnection.findFirst({
+        where: {
+          projectId,
+          provider: { in: ['YANDEX_WORDSTAT', 'XMLSTOCK'] as any },
+          isActive: true,
+        },
+      });
+
+      const config = (conn?.config as any) || {};
+      if (config.rankTrackerEnabled === false) {
+        this.logger.warn(`[RankTracker] Rank Tracking (Съем позиций) is DISABLED in Yandex integration feature toggles. Skipping execution.`);
+        return [];
+      }
+    } catch (err: any) {
+      this.logger.debug(`[RankTracker Feature Toggle Check] ${err.message}`);
+    }
+
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: { keywords: true },
