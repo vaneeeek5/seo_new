@@ -8,6 +8,7 @@ import { YandexWordstatProvider } from './providers/yandex-wordstat.provider';
 import { SiteScraperService } from './services/site-scraper.service';
 import { SearchSuggestProvider } from './providers/search-suggest.provider';
 import { IntentNegativeFilterService } from './services/intent-negative-filter.service';
+import { XmlStockProvider } from './providers/xmlstock.provider';
 
 @Module({
   imports: [
@@ -22,12 +23,14 @@ import { IntentNegativeFilterService } from './services/intent-negative-filter.s
     SiteScraperService,
     SearchSuggestProvider,
     IntentNegativeFilterService,
+    XmlStockProvider,
   ],
   exports: [
     YandexWordstatProvider,
     SiteScraperService,
     SearchSuggestProvider,
     IntentNegativeFilterService,
+    XmlStockProvider,
   ],
 })
 export class SemanticModule {}

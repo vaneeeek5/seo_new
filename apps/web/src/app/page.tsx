@@ -216,12 +216,25 @@ export default function DashboardPage() {
     { id: 'proj_demo_epic', name: 'Epic Car Wash', domain: 'epicarwash.com', date: new Date().toLocaleDateString() }
   ]);
 
-  // Integrations State (Step 1: Delete support)
-  const [providerSelect, setProviderSelect] = useState<'YANDEX_WORDSTAT' | 'METRIKA' | 'GEMINI' | 'OPENAI' | 'ANTHROPIC' | 'WORDSTAT' | 'WORDPRESS_CMS'>('YANDEX_WORDSTAT');
+  // Integrations State (Step 1: Delete support & XmlStock Toggles)
+  const [providerSelect, setProviderSelect] = useState<'YANDEX_WORDSTAT' | 'METRIKA' | 'GEMINI' | 'OPENAI' | 'ANTHROPIC' | 'WORDSTAT' | 'WORDPRESS_CMS' | 'XMLSTOCK'>('XMLSTOCK');
   const [connectionName, setConnectionName] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [xmlUserIdInput, setXmlUserIdInput] = useState('xml_user_1029');
+  const [xmlStockToggles, setXmlStockToggles] = useState<{
+    wordstatEnabled: boolean;
+    yandexXmlEnabled: boolean;
+    yandexLiveEnabled: boolean;
+    googleXmlEnabled: boolean;
+  }>({
+    wordstatEnabled: true,
+    yandexXmlEnabled: true,
+    yandexLiveEnabled: true,
+    googleXmlEnabled: true,
+  });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [connectionsList, setConnectionsList] = useState<Array<{ id: string; provider: string; name: string; maskedKey: string; encryption: string; isActive: boolean; date: string }>>([
+  const [connectionsList, setConnectionsList] = useState<Array<{ id: string; provider: string; name: string; maskedKey: string; encryption: string; isActive: boolean; date: string; config?: any }>>([
+    { id: 'conn_demo_xmlstock', provider: 'XMLSTOCK', name: 'XmlStock Enterprise Gateway', maskedKey: 'xml_pass_****-99ab', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString(), config: { wordstatEnabled: true, yandexXmlEnabled: true, yandexLiveEnabled: true, googleXmlEnabled: true } },
     { id: 'conn_demo_gemini', provider: 'GEMINI', name: 'Google Gemini 1.5 Flash API Key', maskedKey: 'AIza-****-****-9xK2', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString() },
     { id: 'conn_demo_wp', provider: 'WORDPRESS_CMS', name: 'Основной сайт WordPress API', maskedKey: 'wp_a-****-****-00ff', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString() },
   ]);
@@ -379,14 +392,16 @@ export default function DashboardPage() {
     e.preventDefault();
     try {
       const baseUrl = getApiBaseUrl();
+      const configData = providerSelect === 'XMLSTOCK' ? { ...xmlStockToggles, userId: xmlUserIdInput } : undefined;
       const res = await fetch(`${baseUrl}/integrations/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId: 'proj_demo_1',
+          projectId: selectedProjectId,
           provider: providerSelect,
           name: connectionName || `${providerSelect} Connection`,
-          apiKey: apiKeyInput,
+          apiKey: apiKeyInput || 'xml_default_pass',
+          config: configData,
         })
       });
       const data = await res.json();
@@ -401,6 +416,7 @@ export default function DashboardPage() {
           encryption: 'AES-256-GCM',
           isActive: true,
           date: new Date().toLocaleDateString(),
+          config: configData,
         },
         ...prev
       ]);
@@ -883,7 +899,8 @@ export default function DashboardPage() {
                   onChange={(e: any) => setProviderSelect(e.target.value)}
                   style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', background: '#111827', color: '#fff' }}
                 >
-                  <option value="YANDEX_WORDSTAT">Яндекс Wordstat API (Search API)</option>
+                  <option value="XMLSTOCK">XmlStock Enterprise API (Wordstat, Yandex XML/Live, Google XML)</option>
+                  <option value="YANDEX_WORDSTAT">Яндекс Wordstat API (Прямой)</option>
                   <option value="METRIKA">Яндекс Метрика API</option>
                   <option value="OPENAI">OpenAI (ChatGPT API)</option>
                   <option value="GEMINI">Google Gemini API</option>
@@ -895,7 +912,7 @@ export default function DashboardPage() {
                 <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '6px' }}>Название подключения</label>
                 <input
                   type="text"
-                  placeholder="напр. Рабочий ключ Wordstat"
+                  placeholder="напр. XmlStock Gateway"
                   value={connectionName}
                   onChange={(e) => setConnectionName(e.target.value)}
                   style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', background: '#111827', color: '#fff', boxSizing: 'border-box' }}
@@ -903,10 +920,10 @@ export default function DashboardPage() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '6px' }}>Секретный API Ключ (Зашифруется)</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '6px' }}>{providerSelect === 'XMLSTOCK' ? 'Pass / Key' : 'Секретный API Ключ'}</label>
                 <input
                   type="password"
-                  placeholder="y0_a-... или sk-proj-..."
+                  placeholder="y0_a-... или xml_key..."
                   value={apiKeyInput}
                   onChange={(e) => setApiKeyInput(e.target.value)}
                   style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', background: '#111827', color: '#fff', boxSizing: 'border-box' }}
@@ -914,8 +931,58 @@ export default function DashboardPage() {
                 />
               </div>
             </div>
+
+            {/* ИНТЕРАКТИВНЫЕ ТУМБЛЕРЫ ИНСТРУМЕНТОВ XMLSTOCK */}
+            {providerSelect === 'XMLSTOCK' && (
+              <div style={{ background: '#111827', padding: '16px', borderRadius: '10px', border: '1px solid #0284c7', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, fontSize: '14px', color: '#38bdf8' }}>⚙️ Активные инструменты XmlStock (Динамические тумблеры):</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#9ca3af' }}>User ID:</span>
+                    <input
+                      type="text"
+                      value={xmlUserIdInput}
+                      onChange={(e) => setXmlUserIdInput(e.target.value)}
+                      style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #374151', background: '#1f2937', color: '#fff', fontSize: '12px', width: '120px' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {[
+                    { key: 'wordstatEnabled', name: 'Wordstat', label: 'Яндекс Вордстат — частотность и 2 колонки', color: '#38bdf8' },
+                    { key: 'yandexXmlEnabled', name: 'Яндекс XML', label: 'Сбор поисковых подсказок и SERP из XML', color: '#10b981' },
+                    { key: 'yandexLiveEnabled', name: 'Яндекс Live', label: 'Живой парсинг выдачи Яндекса ТОП-10', color: '#f59e0b' },
+                    { key: 'googleXmlEnabled', name: 'Google XML', label: 'Поисковые подсказки и SERP Google', color: '#a855f7' },
+                  ].map((tool) => {
+                    const isChecked = (xmlStockToggles as any)[tool.key];
+                    return (
+                      <div key={tool.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1f2937', padding: '12px 14px', borderRadius: '8px', border: `1px solid ${isChecked ? tool.color : '#374151'}` }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: isChecked ? tool.color : '#9ca3af' }}>
+                            {tool.name}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#6b7280' }}>{tool.label}</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const updated = { ...xmlStockToggles, [tool.key]: e.target.checked };
+                            setXmlStockToggles(updated);
+                            addLog(`[XmlStock Тумблер] ${tool.name} (${tool.key}) set to: ${e.target.checked}`);
+                          }}
+                          style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <button type="submit" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: '#0284c7', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
-              🔒 Зашифровать AES-256-GCM и Сохранить
+              🔒 Зашифровать AES-256-GCM и Сохранить Настройки XmlStock
             </button>
           </form>
 

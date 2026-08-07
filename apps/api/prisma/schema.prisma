@@ -51,6 +51,7 @@ enum IntegrationProvider {
   WORDPRESS_CMS
   CUSTOM_WEBHOOK
   YANDEX_WORDSTAT
+  XMLSTOCK
 }
 
 enum KeywordIntent {
