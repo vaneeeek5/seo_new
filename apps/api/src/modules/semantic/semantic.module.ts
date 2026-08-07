@@ -9,6 +9,9 @@ import { SiteScraperService } from './services/site-scraper.service';
 import { SearchSuggestProvider } from './providers/search-suggest.provider';
 import { IntentNegativeFilterService } from './services/intent-negative-filter.service';
 import { XmlStockProvider } from './providers/xmlstock.provider';
+import { YandexSearchProvider } from './providers/yandex-search.provider';
+import { RankTrackerService } from './services/rank-tracker.service';
+import { CompetitorAnalysisProcessor } from './services/competitor-analysis.processor';
 
 @Module({
   imports: [
@@ -24,6 +27,9 @@ import { XmlStockProvider } from './providers/xmlstock.provider';
     SearchSuggestProvider,
     IntentNegativeFilterService,
     XmlStockProvider,
+    YandexSearchProvider,
+    RankTrackerService,
+    CompetitorAnalysisProcessor,
   ],
   exports: [
     YandexWordstatProvider,
@@ -31,6 +37,9 @@ import { XmlStockProvider } from './providers/xmlstock.provider';
     SearchSuggestProvider,
     IntentNegativeFilterService,
     XmlStockProvider,
+    YandexSearchProvider,
+    RankTrackerService,
+    CompetitorAnalysisProcessor,
   ],
 })
 export class SemanticModule {}

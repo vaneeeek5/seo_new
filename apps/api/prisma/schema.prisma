@@ -108,6 +108,8 @@ model Project {
   contentAssets    ContentAsset[]
   publications     Publication[]
   integrations     IntegrationConnection[]
+  rankHistories    RankHistory[]
+  competitors      CompetitorAnalysis[]
 
   @@map("projects")
 }
@@ -168,29 +170,31 @@ model Task {
 }
 
 model Keyword {
-  id         String         @id @default(uuid())
-  projectId  String
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  term       String
-  searchVol  Int?           @default(0)
-  difficulty Int?           @default(0)
-  intent     KeywordIntent? @default(COMMERCIAL)
-  source     String?        @default("WORDSTAT")
-  clusterId  String?
-  cluster    Cluster?       @relation(fields: [clusterId], references: [id], onDelete: SetNull)
-  createdAt  DateTime       @default(now())
+  id            String        @id @default(uuid())
+  projectId     String
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  term          String
+  searchVol     Int?          @default(0)
+  difficulty    Int?          @default(0)
+  intent        KeywordIntent? @default(COMMERCIAL)
+  source        String?       @default("WORDSTAT")
+  clusterId     String?
+  cluster       Cluster?      @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  rankHistories RankHistory[]
+  createdAt     DateTime      @default(now())
 
   @@map("keywords")
 }
 
 model Cluster {
-  id        String        @id @default(uuid())
-  projectId String
-  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name      String
-  status    ContentStatus @default(DRAFT)
-  keywords  Keyword[]
-  createdAt DateTime      @default(now())
+  id                 String              @id @default(uuid())
+  projectId          String
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name               String
+  status             ContentStatus       @default(DRAFT)
+  keywords           Keyword[]
+  competitorAnalysis CompetitorAnalysis?
+  createdAt          DateTime            @default(now())
 
   @@map("clusters")
 }
@@ -238,4 +242,31 @@ model Publication {
   createdAt      DateTime     @default(now())
 
   @@map("publications")
+}
+
+model RankHistory {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keywordId String
+  keyword   Keyword  @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  position  Int      @default(0)
+  url       String?
+  date      DateTime @default(now())
+
+  @@map("rank_histories")
+}
+
+model CompetitorAnalysis {
+  id                   String   @id @default(uuid())
+  projectId            String
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clusterId            String?  @unique
+  cluster              Cluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  topUrls              Json
+  lsiKeywords          Json
+  recommendedStructure Json
+  createdAt            DateTime @default(now())
+
+  @@map("competitor_analyses")
 }
