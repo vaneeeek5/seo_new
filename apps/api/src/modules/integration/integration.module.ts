@@ -5,7 +5,9 @@ import { SaveConnectionHandler } from './commands/handlers/save-connection.handl
 import { DeleteIntegrationHandler } from './commands/handlers/delete-integration.handler';
 import { GetIntegrationsHandler } from './queries/handlers/get-integrations.handler';
 import { IntegrationService } from './integration.service';
+import { WebhookConfigParserService } from './services/webhook-config-parser.service';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { EncryptionService } from '../../infrastructure/security/encryption.service';
 
 @Module({
   imports: [CqrsModule],
@@ -15,8 +17,10 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
     DeleteIntegrationHandler,
     GetIntegrationsHandler,
     IntegrationService,
+    WebhookConfigParserService,
     PrismaService,
+    EncryptionService,
   ],
-  exports: [IntegrationService],
+  exports: [IntegrationService, WebhookConfigParserService],
 })
 export class IntegrationModule {}

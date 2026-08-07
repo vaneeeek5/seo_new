@@ -232,6 +232,9 @@ export default function DashboardPage() {
     yandexLiveEnabled: true,
     googleXmlEnabled: true,
   });
+  const [importMode, setImportMode] = useState<'MANUAL' | 'FILE'>('MANUAL');
+  const [dragActive, setDragActive] = useState<boolean>(false);
+  const [importingFile, setImportingFile] = useState<boolean>(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [connectionsList, setConnectionsList] = useState<Array<{ id: string; provider: string; name: string; maskedKey: string; encryption: string; isActive: boolean; date: string; config?: any }>>([
     { id: 'conn_demo_xmlstock', provider: 'XMLSTOCK', name: 'XmlStock Enterprise Gateway', maskedKey: 'xml_pass_****-99ab', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString(), config: { wordstatEnabled: true, yandexXmlEnabled: true, yandexLiveEnabled: true, googleXmlEnabled: true } },
@@ -561,6 +564,48 @@ export default function DashboardPage() {
     } catch (err: any) {
       addLog(`[Ошибка Тумблера] ${err.message}`);
     }
+  };
+
+  // Drag-and-Drop File Import for Webhook Settings
+  const handleFileUploadAndImport = async (file: File) => {
+    if (!file) return;
+    setImportingFile(true);
+    addLog(`[Импорт Webhook] Чтение файла "${file.name}" (${file.size} байт)...`);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const fileContent = e.target?.result as string;
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/integrations/import-webhook`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileContent, projectId: selectedProjectId })
+        });
+        const data = await res.json();
+        addLog(`[Импорт Webhook] LLM успешно извлекла конфигурацию -> URL: ${data.url}, Секретный токен: ${data.maskedSecret}`);
+
+        const newConn = {
+          id: data.connectionId || `conn_wh_${Date.now()}`,
+          provider: 'WORDPRESS_CMS',
+          name: data.name || `Импортированный Webhook (${file.name})`,
+          maskedKey: data.maskedSecret || 'secret_****-key',
+          encryption: 'AES-256-GCM',
+          isActive: true,
+          date: new Date().toLocaleDateString(),
+          config: { webhookUrl: data.url },
+        };
+
+        setConnectionsList(prev => [newConn, ...prev]);
+        setToastMessage('🎉 Настройки Webhook успешно импортированы из файла и зашифрованы!');
+        setTimeout(() => setToastMessage(null), 5000);
+      } catch (err: any) {
+        addLog(`[Ошибка Импорта Webhook] ${err.message}`);
+      } finally {
+        setImportingFile(false);
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Project Creation
@@ -1035,8 +1080,72 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSaveConnection} style={{ background: '#1f2937', padding: '20px', borderRadius: '10px', marginBottom: '28px', border: '1px solid #374151' }}>
-            <h3 style={{ fontSize: '15px', color: '#fff', marginTop: 0 }}>Добавить новое подключение</h3>
+          <div style={{ background: '#1f2937', padding: '20px', borderRadius: '10px', marginBottom: '28px', border: '1px solid #374151' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '15px', color: '#fff', margin: 0 }}>Добавить новое подключение</h3>
+              
+              <div style={{ display: 'flex', gap: '6px', background: '#111827', padding: '4px', borderRadius: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setImportMode('MANUAL')}
+                  style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: importMode === 'MANUAL' ? '#0284c7' : 'transparent', color: importMode === 'MANUAL' ? '#fff' : '#9ca3af' }}
+                >
+                  🔑 Ручной ввод
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportMode('FILE')}
+                  style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', background: importMode === 'FILE' ? '#10b981' : 'transparent', color: importMode === 'FILE' ? '#fff' : '#9ca3af' }}
+                >
+                  📁 Импорт из файла (Cursor/AI)
+                </button>
+              </div>
+            </div>
+
+            {importMode === 'FILE' ? (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleFileUploadAndImport(e.dataTransfer.files[0]);
+                  }
+                }}
+                style={{
+                  border: `2px dashed ${dragActive ? '#10b981' : '#0284c7'}`,
+                  borderRadius: '10px',
+                  padding: '28px',
+                  textAlign: 'center',
+                  background: dragActive ? '#064e3b' : '#111827',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <div style={{ fontSize: '32px', marginBottom: '8px' }}>📁</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#f3f4f6', marginBottom: '4px' }}>
+                  {importingFile ? '⏳ Парсинг файла с помощью LLM...' : 'Перетащите сюда файл конфигурации (.md, .txt, .json)'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#9ca3af', marginBottom: '14px' }}>
+                  Нейросеть автоматически извлечет Webhook URL и Secret Key для HMAC-подписи
+                </div>
+                <label style={{ padding: '8px 16px', background: '#0284c7', color: '#fff', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}>
+                  Выбрать файл на устройстве
+                  <input
+                    type="file"
+                    accept=".md,.txt,.json"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleFileUploadAndImport(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveConnection}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '6px' }}>Сервис / Провайдер</label>
@@ -1131,6 +1240,8 @@ export default function DashboardPage() {
               🔒 Зашифровать AES-256-GCM и Сохранить Настройки XmlStock
             </button>
           </form>
+        )}
+      </div>
 
           <h3 style={{ fontSize: '16px', color: '#f3f4f6', marginBottom: '14px' }}>Активные подключения ({connectionsList.length})</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>

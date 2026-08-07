@@ -4,6 +4,7 @@ import { SaveConnectionCommand, SaveConnectionDto } from './commands/save-connec
 import { DeleteIntegrationCommand } from './commands/delete-integration.command';
 import { GetIntegrationsQuery } from './queries/get-integrations.query';
 import { IntegrationService } from './integration.service';
+import { WebhookConfigParserService } from './services/webhook-config-parser.service';
 
 @Controller('integrations')
 export class IntegrationController {
@@ -11,6 +12,7 @@ export class IntegrationController {
     private readonly commandBus: CommandBus,
     private readonly queryBus: QueryBus,
     private readonly integrationService: IntegrationService,
+    private readonly webhookParser: WebhookConfigParserService,
   ) {}
 
   @Post()
@@ -23,6 +25,13 @@ export class IntegrationController {
   @HttpCode(HttpStatus.CREATED)
   async saveConnection(@Body() dto: SaveConnectionDto) {
     return await this.commandBus.execute(new SaveConnectionCommand(dto));
+  }
+
+  @Post('import-webhook')
+  @HttpCode(HttpStatus.OK)
+  async importWebhookConfig(@Body() body: { fileContent: string; projectId?: string }) {
+    const { fileContent, projectId } = body;
+    return await this.webhookParser.parseAndSaveWebhookConfig(fileContent || '', projectId || 'proj_demo_1');
   }
 
   @Get()
