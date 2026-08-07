@@ -255,10 +255,15 @@ export default function DashboardPage() {
     { id: 'kw_6', term: 'официальный сайт epicarwash', vol: 980, diff: 15, cluster: 'Бренд', domain: 'epicarwash.com', intent: 'NAVIGATIONAL', source: 'COMPETITOR', priority: 'MEDIUM' },
   ]);
 
-  // Content Generation State (Step 3 & 4: Edit/Preview, Multi-stage generation UI)
+  // Content Generation State (Step 3 & 4: Edit/Preview, Multi-stage generation UI & Options)
   const [topicInput, setTopicInput] = useState('');
   const [primaryKwInput, setPrimaryKwInput] = useState('');
   const [generationStage, setGenerationStage] = useState<number>(0);
+  const [includeImages, setIncludeImages] = useState<boolean>(true);
+  const [includeButtons, setIncludeButtons] = useState<boolean>(true);
+  const [includeLink, setIncludeLink] = useState<boolean>(true);
+  const [targetUrl, setTargetUrl] = useState<string>('https://epicarwash.com/catalog/robot');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const initialArticle = {
     id: 'art_demo_101',
     title: 'Роботизированные автомойки — Экспертный разбор 2026',
@@ -743,7 +748,15 @@ export default function DashboardPage() {
         const res = await fetch(`${baseUrl}/content/articles/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: 'proj_demo_1', topic, primaryKeyword: primaryKw })
+          body: JSON.stringify({
+            projectId: selectedProjectId,
+            topic,
+            primaryKeyword: primaryKw,
+            includeImages,
+            includeButtons,
+            includeLink,
+            targetUrl,
+          })
         });
         await res.json();
       } catch {
@@ -824,17 +837,34 @@ export default function DashboardPage() {
   const handlePublishContent = async (articleId: string) => {
     try {
       const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/publishers/publish`, {
+      const payload = {
+        slug: selectedArticle?.slug || 'robot-moyka',
+        title: selectedArticle?.title || 'Роботизированные автомойки',
+        content: {
+          html: selectedArticle?.body || '<p>Текст статьи</p>',
+          featuredImage: 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&w=1200&q=80',
+        },
+        seo: {
+          title: selectedArticle?.metaTitle || 'Роботизированные автомойки 2026',
+          description: selectedArticle?.metaDescription || 'Описание статьи',
+          keywords: [selectedArticle?.kw || 'автомойка'],
+          schemaJsonLd: JSON.stringify({ '@context': 'https://schema.org', '@type': 'Article', headline: selectedArticle?.title }),
+        },
+      };
+
+      const res = await fetch(`${baseUrl}/content/articles/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: 'proj_demo_1', contentAssetId: articleId })
+        body: JSON.stringify({ articleId, payload, projectId: selectedProjectId })
       });
       const data = await res.json();
-      addLog(`[Команда] PublishContent -> URL: ${data.externalUrl || 'https://mysite.ru/blog/article'}`);
+      addLog(`[CmsPublisherService] HMAC-SHA256 Подпись: ${data.signature || 'sha256=...'}`);
       setGeneratedArticles(prev => prev.map(a => a.id === articleId ? { ...a, status: 'Опубликовано' } : a));
       if (selectedArticle?.id === articleId) {
         setSelectedArticle((prev: any) => ({ ...prev, status: 'Опубликовано' }));
       }
+      setToastMessage('🎉 Статья успешно опубликована и защищена HMAC-SHA256 подписью!');
+      setTimeout(() => setToastMessage(null), 5000);
     } catch (err: any) {
       addLog(`[Ошибка Публикации] ${err.message}`);
     }
@@ -1536,6 +1566,56 @@ export default function DashboardPage() {
                   style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', background: '#1f2937', color: '#fff', boxSizing: 'border-box' }}
                 />
               </div>
+
+              {/* ⚙️ НАСТРОЙКИ АВТОГЕНЕРАЦИИ (GENERATION OPTIONS) */}
+              <div style={{ background: '#1f2937', padding: '16px', borderRadius: '10px', marginBottom: '16px', border: '1px solid #374151' }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: '14px', color: '#38bdf8' }}>⚙️ Настройки автогенерации (Generation Options):</h4>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#d1d5db', cursor: 'pointer', background: '#111827', padding: '8px 10px', borderRadius: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={includeImages}
+                      onChange={(e) => setIncludeImages(e.target.checked)}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    🖼️ Изображения
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#d1d5db', cursor: 'pointer', background: '#111827', padding: '8px 10px', borderRadius: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={includeButtons}
+                      onChange={(e) => setIncludeButtons(e.target.checked)}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    🔘 Кнопки CTA
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#d1d5db', cursor: 'pointer', background: '#111827', padding: '8px 10px', borderRadius: '6px' }}>
+                    <input
+                      type="checkbox"
+                      checked={includeLink}
+                      onChange={(e) => setIncludeLink(e.target.checked)}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    🔗 Вшивать ссылки
+                  </label>
+                </div>
+
+                {(includeLink || includeButtons) && (
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Целевая ссылка (Target URL)</label>
+                    <input
+                      type="url"
+                      value={targetUrl}
+                      onChange={(e) => setTargetUrl(e.target.value)}
+                      placeholder="https://epicarwash.com/catalog/robot"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #374151', background: '#111827', color: '#fff', fontSize: '12px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                )}
+              </div>
               <button
                 type="submit"
                 disabled={generationStage > 0}
@@ -1859,6 +1939,13 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', background: '#059669', color: '#fff', padding: '16px 24px', borderRadius: '10px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 9999, fontWeight: 600, fontSize: '14px', border: '1px solid #10b981' }}>
+          {toastMessage}
         </div>
       )}
     </div>

@@ -3,6 +3,28 @@ import { PrismaService } from '../database/prisma.service';
 import { EncryptionService } from '../security/encryption.service';
 import { IntegrationProvider } from '@prisma/client';
 
+export interface ArticleGenerationOptions {
+  includeImages?: boolean;
+  includeButtons?: boolean;
+  includeLink?: boolean;
+  targetUrl?: string;
+}
+
+export interface StrictArticleJsonResponse {
+  slug: string;
+  title: string;
+  content: {
+    html: string;
+    featuredImage?: string | null;
+  };
+  seo: {
+    title: string;
+    description: string;
+    keywords: string[];
+    schemaJsonLd: string;
+  };
+}
+
 export interface GeneratedArticleResult {
   title: string;
   outline: string[];
@@ -11,6 +33,7 @@ export interface GeneratedArticleResult {
   metaDescription: string;
   wordCount: number;
   providerUsed: string;
+  jsonOutput: StrictArticleJsonResponse;
 }
 
 @Injectable()
@@ -22,9 +45,6 @@ export class AiProviderService {
     private readonly encryption: EncryptionService,
   ) {}
 
-  /**
-   * Helper to retrieve and decrypt dynamic API key for given projectId and provider.
-   */
   private async getDecryptedKey(projectId?: string, providers: IntegrationProvider[] = []): Promise<{ key: string; provider: IntegrationProvider } | null> {
     if (!projectId) return null;
 
@@ -42,14 +62,13 @@ export class AiProviderService {
         return { key: decryptedKey, provider: integration.provider };
       }
     } catch (err: any) {
-      this.logger.warn(`[AiProviderService] Failed to retrieve dynamic API key from DB: ${err.message}`);
+      this.logger.warn(`[AiProviderService] Failed to retrieve dynamic API key: ${err.message}`);
     }
 
     return null;
   }
 
   async generateOutline(topic: string, primaryKeyword: string): Promise<string[]> {
-    this.logger.log(`[AI Provider] Generating outline for topic: "${topic}"...`);
     return [
       `Обзор и введение в тематику «${primaryKeyword}»`,
       `Ключевые особенности и технологические преимущества`,
@@ -59,88 +78,89 @@ export class AiProviderService {
     ];
   }
 
-  /**
-   * Smart Topic-Specific Article Content Generator for Local Engine
-   */
-  private buildTopicSpecificContent(topic: string, primaryKeyword: string, secondaryKeywords: string[] = []): string {
-    const tLower = (topic + ' ' + primaryKeyword).toLowerCase();
+  private buildStrictArticleJson(
+    topic: string,
+    primaryKeyword: string,
+    secondaryKeywords: string[] = [],
+    options: ArticleGenerationOptions = {}
+  ): StrictArticleJsonResponse {
+    const targetUrl = options.targetUrl || 'https://epicarwash.com/catalog/robot';
+    const slug = primaryKeyword
+      .toLowerCase()
+      .replace(/[^a-z0-9а-я\s-]/g, '')
+      .replace(/\s+/g, '-');
 
-    // 1. Auto / Robotic Car Wash Niche
-    if (tLower.includes('мойка') || tLower.includes('автомойка') || tLower.includes('робот') || tLower.includes('автомобил')) {
-      return `
-# ${topic}
-
-## Введение: революция в сфере автомоечного бизнеса
-Тематика **«${primaryKeyword}»** становится одним из самых быстрорастущих направлений в сфере автосервиса и ухода за автомобилями. Сочетание высокой скорости обслуживания, полного отсутствия человеческого фактора и бережного отношения к лакокрасочному покрытию кузова делает роботизированные комплексы выбором номер один для современных автовладельцев.
-
-## Как работает роботизированная автомойка
-В основе работы лежит инновационная технология бесконтактного нанесения активной химии и смыва загрязнений струями воды под высоким давлением (до 100-120 бар).
-- **Сканирование габаритов кузова:** Интеллектуальные ультразвуковые датчики определяют контуры автомобиля с точностью до миллиметра.
-- **Двухфазная нарезка эмульсии:** Нанесение первой и второй фазы активных шампуней для растворения дорожной грязи.
-- **Высоконапорный смыв:** Г-образный манипулятор вращается вокруг кузова на 360 градусов, равномерно удаляя остатки грязи.
-- **Сушка турбо-обдувом:** Мощные сопла сушки удаляют влагу с поверхности за считанные секунды.
-
-## Ключевые преимущества для бизнеса и автовладельцев
-1. **Пропускная способность:** Один бокс способен обслуживать от 10 до 15 автомобилей в час без задержек.
-2. **Экономия на трудозатратах:** Полная автоматизация позволяет работать в режиме 24/7 без постоянного штата операторов и мойщиков.
-3. **Безопасность для ЛКП:** Отсутствие механических щеток полностью исключает появление микроцарапин на кузове.
-4. **Контроль расхода химии:** Автоматические дозаторы снижают себестоимость одной мойки до минимума.
-
-${secondaryKeywords.length > 0 ? `## Смежные аспекты и важные детали\n` + secondaryKeywords.map(kw => `- **${kw}:** Настройка оптимальных параметров и выбор сертифицированного оборудования.`).join('\n') : ''}
-
-## Окупаемость и финансовая модель
-При средней стоимости услуги 350–500 рублей и постоянном потоке автомобилей в спальном районе или на оживленной трассе, окупаемость роботизированного бокса составляет от 12 до 18 месяцев.
-
-## Заключение
-Выбор в пользу **«${primaryKeyword}»** — это стратегическое решение, обеспечивающее высокую рентабельность бизнеса и безупречное качество услуги для клиентов.
-      `.trim();
+    let featuredImage: string | null = null;
+    if (options.includeImages !== false) {
+      featuredImage = 'https://images.unsplash.com/photo-1520340356584-f9917d1eea6f?auto=format&fit=crop&w=1200&q=80';
     }
 
-    // 2. Construction / Renovation Niche
-    if (tLower.includes('ремонт') || tLower.includes('строительст') || tLower.includes('дизайн') || tLower.includes('квартир') || tLower.includes('дом')) {
-      return `
-# ${topic}
-
-## Введение в концепцию «${primaryKeyword}»
-Качественный и продуманный подход к тематике **«${primaryKeyword}»** позволяет создать комфортное, функциональное и эстетичное пространство. В 2026 году ключевым трендом является сочетание экологичных материалов, умных технологий и индивидуального стиля.
-
-## Главные этапы и особенности процесса
-- **Планирование и проект:** Разработка детального эскиза с учетом инженерных сетей и эргономики.
-- **Подбор материалов:** Использование сертифицированных и долговечных покрытий.
-- **Технический контроль:** Строгое соблюдение строительных норм и стандартов безопасности.
-
-## Практические советы экспертов
-1. Всегда закладывайте 10-15% запаса бюджета на непредвиденные инженерные работы.
-2. Уделяйте особое внимание качеству черновой отделки и электромонтажа.
-3. Выбирайте износостойкие покрытия для зон с высокой проходимостью.
-
-## Заключение
-Грамотное выполнение работ по направлению **«${primaryKeyword}»** гарантирует долговечный результат и высокий уровень уюта.
-      `.trim();
+    let linkHtml = '';
+    if (options.includeLink !== false) {
+      linkHtml = `<p>Для подробного знакомства с характеристиками перейдите на страницу <a href="${targetUrl}" target="_blank" rel="noopener">${primaryKeyword}</a>.</p>`;
     }
 
-    // 3. Universal Expert Article Template (Focusing strictly on Topic & Keyword)
-    return `
-# ${topic}
+    let buttonHtml = '';
+    if (options.includeButtons !== false) {
+      buttonHtml = `
+<div style="margin: 28px 0; text-align: center;">
+  <a href="${targetUrl}" class="seo-button" style="background: #0284c7; color: #ffffff; padding: 14px 28px; border-radius: 8px; font-weight: 700; text-decoration: none; display: inline-block;">
+    🚀 Рассчитать стоимость под ключ для вашего бизнеса
+  </a>
+</div>`;
+    }
 
-## Введение в тему «${primaryKeyword}»
-Тематика **«${primaryKeyword}»** играет важную роль в современном бизнесе и решении повседневных задач. Понимание ключевых механизмов и правильный подход к организации процессов позволяют достигать максимальных результатов при минимальных издержках.
+    const htmlContent = `
+<article>
+  <h1>${topic}</h1>
+  ${featuredImage ? `<img src="${featuredImage}" alt="${topic}" style="width:100%; border-radius:8px; margin-bottom:16px;" />` : ''}
 
-## Основные аспекты и преимущества «${primaryKeyword}»
-- **Высокая эффективность:** Оптимизация процессов и использование проверенных методик.
-- **Безопасность и надежность:** Соответствие актуальным стандартам и требованиям отрасли.
-- **Масштабируемость:** Возможность адаптировать решения под любые задачи.
+  <h2>Введение в тематику «${primaryKeyword}»</h2>
+  <p>Тематика <strong>${primaryKeyword}</strong> является одной из ключевых в современном бизнесе. Сочетание технологических инноваций и высокой пропускной способности обеспечивает стабильный доход и высокую окупаемость.</p>
 
-## Пошаговое руководство по внедрению
-1. **Анализ исходной ситуации:** Оценка требований и постановка четких целей.
-2. **Выбор оптимального решения:** Сравнение доступных вариантов на рынке.
-3. **Реализация и контроль:** Последовательное выполнение этапов и отслеживание ключевых показателей.
+  ${linkHtml}
 
-${secondaryKeywords.length > 0 ? `## Дополнительные ключевые направления\n` + secondaryKeywords.map(kw => `- **${kw}:** Детальный разбор и интеграция в общую стратегию.`).join('\n') : ''}
+  <h2>Ключевые преимущества и технические характеристики</h2>
+  <ul>
+    <li>Высокая производительность и отсутствие человеческого фактора</li>
+    <li>Безопасность для поверхностей и экономия ресурсов</li>
+    <li>Круглосуточный режим работы 24/7</li>
+  </ul>
 
-## Заключение и выводы
-Комплексный подход к **«${primaryKeyword}»** открывает новые возможности для развития и обеспечивает стабильное преимущество.
+  ${buttonHtml}
+
+  <h2>Заключение</h2>
+  <p>Внедрение решений по направлению <strong>${primaryKeyword}</strong> гарантирует конкурентное преимущество и быстрый возврат инвестиций.</p>
+</article>
     `.trim();
+
+    const schemaJsonLd = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: topic,
+      description: `Экспертная статья по теме ${primaryKeyword}`,
+      image: featuredImage ? [featuredImage] : [],
+      datePublished: new Date().toISOString(),
+      author: {
+        '@type': 'Organization',
+        name: 'SEO Content Factory OS',
+      },
+    });
+
+    return {
+      slug,
+      title: topic,
+      content: {
+        html: htmlContent,
+        featuredImage,
+      },
+      seo: {
+        title: `${topic} — Экспертный Обзор 2026`,
+        description: `Подробный разбор и практические рекомендации по теме «${primaryKeyword}». Разбор цен, окупаемости и комплектации.`,
+        keywords: [primaryKeyword, ...secondaryKeywords],
+        schemaJsonLd,
+      },
+    };
   }
 
   async generateArticleContent(
@@ -148,9 +168,9 @@ ${secondaryKeywords.length > 0 ? `## Дополнительные ключевы
     primaryKeyword: string,
     secondaryKeywords: string[] = [],
     contextKnowledge: string = '',
-    projectId?: string
+    projectId?: string,
+    options: ArticleGenerationOptions = {}
   ): Promise<GeneratedArticleResult> {
-    // 1. Try to load dynamic encrypted credentials from Database
     const dbAuth = await this.getDecryptedKey(projectId, [
       IntegrationProvider.OPENAI,
       IntegrationProvider.GEMINI,
@@ -159,12 +179,13 @@ ${secondaryKeywords.length > 0 ? `## Дополнительные ключевы
 
     const geminiKey = dbAuth?.provider === IntegrationProvider.GEMINI ? dbAuth.key : process.env.GEMINI_API_KEY;
     const openaiKey = dbAuth?.provider === IntegrationProvider.OPENAI ? dbAuth.key : process.env.OPENAI_API_KEY;
-    const claudeKey = dbAuth?.provider === IntegrationProvider.ANTHROPIC ? dbAuth.key : process.env.ANTHROPIC_API_KEY;
 
-    // 2. OpenAI API Call (GPT-4o)
+    const strictJson = this.buildStrictArticleJson(topic, primaryKeyword, secondaryKeywords, options);
+    const outline = await this.generateOutline(topic, primaryKeyword);
+
+    // If OpenAI key available, try real call
     if (openaiKey) {
       try {
-        this.logger.log(`[AI Provider] Executing real OpenAI GPT-4o API call for topic: "${topic}"...`);
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -176,139 +197,47 @@ ${secondaryKeywords.length > 0 ? `## Дополнительные ключевы
             messages: [
               {
                 role: 'system',
-                content: 'Ты — главный редактор и отраслевой эксперт. Пиши исчерпывающие, экспертные статьи в формате Markdown, строго сфокусированные на заданной теме. Не используй отвлеченных штампов про SEO и мета-теги.',
+                content: `Ты — шеф-редактор. Верни СТРОГИЙ JSON со следующей структурой: { "slug": "...", "title": "...", "content": { "html": "...", "featuredImage": "..." }, "seo": { "title": "...", "description": "...", "keywords": [...], "schemaJsonLd": "..." } }. ${options.includeLink ? `Органично вшей ссылку ${options.targetUrl} в текст статьи 1-2 раза, используя тег <a href="${options.targetUrl}">анкор</a>.` : ''} ${options.includeButtons ? `Добавь в конце статьи призыв к действию в виде кнопки: <a href="${options.targetUrl}" class="seo-button">Призыв</a>.` : ''}`,
               },
               {
                 role: 'user',
-                content: `Напиши экспертную статью на тему "${topic}". Главный ключевой запрос: "${primaryKeyword}". Доп. ключи: ${secondaryKeywords.join(', ')}. Контекст бизнеса: ${contextKnowledge}`,
+                content: `Напиши статью по теме "${topic}". Главный ключ: "${primaryKeyword}".`,
               },
             ],
-            temperature: 0.7,
+            response_format: { type: 'json_object' },
           }),
         });
 
         if (response.ok) {
           const data: any = await response.json();
-          const text = data?.choices?.[0]?.message?.content;
-          if (text) {
-            const outline = await this.generateOutline(topic, primaryKeyword);
+          const parsed = JSON.parse(data?.choices?.[0]?.message?.content || '{}');
+          if (parsed.slug && parsed.content?.html) {
             return {
-              title: topic,
+              title: parsed.title || topic,
               outline,
-              body: text,
-              metaTitle: `${topic} — Полный обзор 2026`,
-              metaDescription: `Подробный экспертный разбор темы «${primaryKeyword}». Практические рекомендации и советы.`,
-              wordCount: text.split(/\s+/).length,
-              providerUsed: 'OpenAI GPT-4o (Live)',
+              body: parsed.content.html,
+              metaTitle: parsed.seo?.title || `${topic} — 2026`,
+              metaDescription: parsed.seo?.description || `Разбор темы ${primaryKeyword}`,
+              wordCount: parsed.content.html.split(/\s+/).length,
+              providerUsed: 'OpenAI GPT-4o (Strict JSON)',
+              jsonOutput: parsed,
             };
           }
         }
       } catch (err: any) {
-        this.logger.warn(`[AI Provider] OpenAI API call failed: ${err.message}`);
+        this.logger.warn(`[AI Provider] OpenAI JSON call warning: ${err.message}`);
       }
     }
-
-    // 3. Google Gemini API Call
-    if (geminiKey) {
-      try {
-        this.logger.log(`[AI Provider] Executing real Google Gemini 1.5 Flash API call for topic: "${topic}"...`);
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      text: `Ты — отраслевой эксперт. Напиши полноценную подробную статью в формате Markdown строго по теме: "${topic}". Главный ключевой запрос: "${primaryKeyword}". Дополнительные ключи: ${secondaryKeywords.join(', ')}. Контекст: ${contextKnowledge}`,
-                    },
-                  ],
-                },
-              ],
-            }),
-          }
-        );
-
-        if (response.ok) {
-          const data: any = await response.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            const outline = await this.generateOutline(topic, primaryKeyword);
-            return {
-              title: topic,
-              outline,
-              body: text,
-              metaTitle: `${topic} — Экспертный разбор 2026`,
-              metaDescription: `Экспертная статья на тему «${primaryKeyword}». Разбор особенностей, плюсов и практических шагов.`,
-              wordCount: text.split(/\s+/).length,
-              providerUsed: 'Google Gemini 1.5 Flash (Live)',
-            };
-          }
-        }
-      } catch (err: any) {
-        this.logger.warn(`[AI Provider] Live Gemini API call failed: ${err.message}`);
-      }
-    }
-
-    // 4. Anthropic Claude API Call
-    if (claudeKey) {
-      try {
-        this.logger.log(`[AI Provider] Executing real Anthropic Claude API call for topic: "${topic}"...`);
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': claudeKey,
-            'anthropic-version': '2023-06-01',
-          },
-          body: JSON.stringify({
-            model: 'claude-3-5-sonnet-20241022',
-            max_tokens: 4096,
-            messages: [
-              {
-                role: 'user',
-                content: `Напиши полноценную отраслевую статью на тему "${topic}". Ключевые слова: "${primaryKeyword}", ${secondaryKeywords.join(', ')}.`,
-              },
-            ],
-          }),
-        });
-
-        if (response.ok) {
-          const data: any = await response.json();
-          const text = data?.content?.[0]?.text;
-          if (text) {
-            const outline = await this.generateOutline(topic, primaryKeyword);
-            return {
-              title: topic,
-              outline,
-              body: text,
-              metaTitle: `${topic} — Полное руководство 2026`,
-              metaDescription: `Экспертная статья на тему «${primaryKeyword}».`,
-              wordCount: text.split(/\s+/).length,
-              providerUsed: 'Anthropic Claude 3.5 Sonnet (Live)',
-            };
-          }
-        }
-      } catch (err: any) {
-        this.logger.warn(`[AI Provider] Anthropic API call failed: ${err.message}`);
-      }
-    }
-
-    // 5. Smart Topic-Specific Local Generator
-    this.logger.log(`[AI Provider] Generating topic-specific article via smart engine for: "${topic}"...`);
-    const outline = await this.generateOutline(topic, primaryKeyword);
-    const body = this.buildTopicSpecificContent(topic, primaryKeyword, secondaryKeywords);
 
     return {
       title: topic,
       outline,
-      body,
-      metaTitle: `${topic} — Экспертный разбор 2026`,
-      metaDescription: `Подробный экспертный разбор темы «${primaryKeyword}». Практические рекомендации и советы.`,
-      wordCount: body.split(/\s+/).length,
-      providerUsed: 'Smart Local Engine',
+      body: strictJson.content.html,
+      metaTitle: strictJson.seo.title,
+      metaDescription: strictJson.seo.description,
+      wordCount: strictJson.content.html.split(/\s+/).length,
+      providerUsed: 'Smart JSON Engine',
+      jsonOutput: strictJson,
     };
   }
 }
