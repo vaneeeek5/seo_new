@@ -1257,31 +1257,83 @@ export default function DashboardPage() {
                   Ключ: <strong style={{ color: '#f3f4f6' }}>{conn.maskedKey}</strong>
                 </div>
 
-                {/* ⚙️ АКТИВНЫЕ МОДУЛИ (FEATURE TOGGLES) */}
+                {/* ⚙️ СПЕЦИФИЧЕСКИЕ ТУМБЛЕРЫ В ЗАВИСИМОСТИ ОТ ТИПА ПРОВАЙДЕРА */}
                 <div style={{ background: '#111827', padding: '12px', borderRadius: '8px', marginBottom: '14px', border: '1px solid #374151' }}>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: '#38bdf8', marginBottom: '8px' }}>
-                    ⚙️ Активные модули (Feature Toggles):
+                    ⚙️ Активные модули провайдера:
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
-                      <span>📊 Съем позиций (Rank Tracker)</span>
-                      <input
-                        type="checkbox"
-                        checked={conn.config?.rankTrackerEnabled !== false}
-                        onChange={(e) => handleToggleConnectionFeature(conn.id, 'rankTrackerEnabled', e.target.checked)}
-                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                      />
-                    </label>
+                    {/* 1. SEO & SEARCH DATA PROVIDERS (XMLSTOCK, YANDEX_WORDSTAT) */}
+                    {(conn.provider === 'XMLSTOCK' || conn.provider === 'YANDEX_WORDSTAT' || conn.provider === 'WORDSTAT') && (
+                      <>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                          <span>📊 Съем позиций в поиске (Rank Tracker)</span>
+                          <input
+                            type="checkbox"
+                            checked={conn.config?.rankTrackerEnabled !== false}
+                            onChange={(e) => handleToggleConnectionFeature(conn.id, 'rankTrackerEnabled', e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                        </label>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                          <span>🔍 Анализ конкурентов (LSI & ТОП-10)</span>
+                          <input
+                            type="checkbox"
+                            checked={conn.config?.competitorParsingEnabled !== false}
+                            onChange={(e) => handleToggleConnectionFeature(conn.id, 'competitorParsingEnabled', e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                        </label>
+                      </>
+                    )}
 
-                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
-                      <span>🔍 Анализ конкурентов (LSI & Структура)</span>
-                      <input
-                        type="checkbox"
-                        checked={conn.config?.competitorParsingEnabled !== false}
-                        onChange={(e) => handleToggleConnectionFeature(conn.id, 'competitorParsingEnabled', e.target.checked)}
-                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                      />
-                    </label>
+                    {/* 2. CMS & WEBHOOK PUBLISHERS (WORDPRESS_CMS, WEBHOOK) */}
+                    {(conn.provider === 'WORDPRESS_CMS' || conn.provider === 'WEBHOOK' || conn.provider === 'CUSTOM_WEBHOOK') && (
+                      <>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                          <span>🚀 Авто-публикация готовых статей</span>
+                          <input
+                            type="checkbox"
+                            checked={conn.config?.autoPublishEnabled !== false}
+                            onChange={(e) => handleToggleConnectionFeature(conn.id, 'autoPublishEnabled', e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                        </label>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                          <span>🔒 HMAC-SHA256 защита запросов</span>
+                          <input
+                            type="checkbox"
+                            checked={conn.config?.hmacSignatureEnabled !== false}
+                            onChange={(e) => handleToggleConnectionFeature(conn.id, 'hmacSignatureEnabled', e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                        </label>
+                      </>
+                    )}
+
+                    {/* 3. LLM AI PROVIDERS (GEMINI, OPENAI, ANTHROPIC) */}
+                    {(conn.provider === 'GEMINI' || conn.provider === 'OPENAI' || conn.provider === 'ANTHROPIC') && (
+                      <>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                          <span>✍️ Генерация экспертных статей (LLM)</span>
+                          <input
+                            type="checkbox"
+                            checked={conn.config?.textGenerationEnabled !== false}
+                            onChange={(e) => handleToggleConnectionFeature(conn.id, 'textGenerationEnabled', e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                        </label>
+                        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#d1d5db', cursor: 'pointer' }}>
+                          <span>🧠 Классификация интента и минус-слов</span>
+                          <input
+                            type="checkbox"
+                            checked={conn.config?.intentClassificationEnabled !== false}
+                            onChange={(e) => handleToggleConnectionFeature(conn.id, 'intentClassificationEnabled', e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                        </label>
+                      </>
+                    )}
                   </div>
                 </div>
 
