@@ -8,9 +8,11 @@ import { BullModule } from '@nestjs/bullmq';
       connection: {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        lazyConnect: true,
+        connectTimeout: 5000,
         enableOfflineQueue: true,
         maxRetriesPerRequest: null,
-        retryStrategy: (times: number) => Math.min(times * 200, 3000),
+        retryStrategy: (times: number) => Math.min(times * 100, 2000),
       },
     }),
     BullModule.registerQueue(
