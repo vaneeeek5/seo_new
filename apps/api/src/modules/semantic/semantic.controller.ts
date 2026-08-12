@@ -260,7 +260,13 @@ export class SemanticController {
   @HttpCode(HttpStatus.OK)
   async trackPositions(@Body() body: { projectId: string }) {
     const projectId = body.projectId || 'proj_demo_1';
-    return await this.rankTracker.trackProjectPositions(projectId);
+    const { results, errorMessage } = await this.rankTracker.trackProjectPositions(projectId);
+    return {
+      success: !errorMessage,
+      count: results.length,
+      results,
+      errorMessage: errorMessage || null,
+    };
   }
 
   @Get('rank-history/:projectId')

@@ -13,6 +13,7 @@ import { YandexSearchProvider } from './providers/yandex-search.provider';
 import { RankTrackerService } from './services/rank-tracker.service';
 import { CompetitorAnalysisProcessor } from './services/competitor-analysis.processor';
 import { PrismaService } from '../../infrastructure/database/prisma.service';
+import { EncryptionService } from '../../infrastructure/security/encryption.service';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PrismaService } from '../../infrastructure/database/prisma.service';
     RankTrackerService,
     CompetitorAnalysisProcessor,
     PrismaService,
+    EncryptionService,
   ],
   exports: [
     YandexWordstatProvider,

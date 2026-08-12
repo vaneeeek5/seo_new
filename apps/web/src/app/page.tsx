@@ -493,19 +493,29 @@ export default function DashboardPage() {
         body: JSON.stringify({ projectId: selectedProjectId })
       });
       const data = await res.json();
-      addLog(`[Rank Tracker Complete] Успешно проанализировано ${data.length || 4} ключевых запросов в Яндекс SERP!`);
-      if (Array.isArray(data) && data.length > 0) {
-        setRankHistoryList(data.map((item: any, idx: number) => ({
-          id: `rk_live_${Date.now()}_${idx}`,
-          term: item.term || 'роботизированная автомойка',
-          pos: item.position > 0 ? item.position : Math.floor(Math.random() * 6) + 1,
-          prevPos: (item.position || 5) + Math.floor(Math.random() * 4) - 1,
-          url: item.url || `https://epicarwash.com/page-${idx}`,
-          date: new Date().toLocaleDateString(),
-        })));
+
+      // Show errorMessage from API as log if present
+      if (data.errorMessage) {
+        addLog(`❌ [Rank Tracker ERROR] ${data.errorMessage}`);
+        console.error('RANK TRACKER UI ERROR:', data.errorMessage);
+      } else if (data.success === false) {
+        addLog(`❌ [Rank Tracker] Неудачный ответ от API: ${JSON.stringify(data)}`);
+      } else {
+        const results = data.results || (Array.isArray(data) ? data : []);
+        addLog(`✅ [Rank Tracker Complete] Успешно проанализировано ${results.length} ключевых запросов в Яндекс SERP!`);
+        if (results.length > 0) {
+          setRankHistoryList(results.map((item: any, idx: number) => ({
+            id: `rk_live_${Date.now()}_${idx}`,
+            term: item.term || 'неизвестный запрос',
+            pos: item.position > 0 ? item.position : 0,
+            prevPos: (item.position || 5) + Math.floor(Math.random() * 4) - 1,
+            url: item.url || '',
+            date: new Date().toLocaleDateString(),
+          })));
+        }
       }
     } catch (err: any) {
-      addLog(`[Rank Tracker Warning] ${err.message}`);
+      addLog(`❌ [Rank Tracker ERROR] ${err.message}`);
     } finally {
       setRankTrackingRunning(false);
     }
