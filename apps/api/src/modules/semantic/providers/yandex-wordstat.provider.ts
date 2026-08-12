@@ -18,7 +18,6 @@ export class YandexWordstatProvider implements ISemanticProvider {
   // Official Endpoints for Yandex AI Studio / Yandex Cloud Search API Wordstat
   private readonly cloudWordstatUrl = 'https://searchapi.api.cloud.yandex.net/v2/wordstat/topRequests';
   private readonly legacyWordstatUrl = 'https://api.wordstat.yandex.net/v1/topRequests';
-  private readonly yandexDirectUrl = 'https://api.direct.yandex.ru/v5/wordstat';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -27,27 +26,28 @@ export class YandexWordstatProvider implements ISemanticProvider {
   ) {}
 
   /**
-   * Retrieves and decrypts Yandex Wordstat API key & folderId from database for given projectId.
+   * Retrieves and decrypts Yandex Wordstat API key & folderId from database.
    */
-  private async getDecryptedIntegration(projectId?: string): Promise<{ apiKey: string; folderId?: string } | null> {
-    if (!projectId) return null;
-
+  private async getDecryptedIntegration(projectId?: string): Promise<{ apiKey: string; folderId?: string; provider: string } | null> {
     const integration = await this.prisma.integrationConnection.findFirst({
       where: {
-        projectId,
         provider: {
           in: [IntegrationProvider.YANDEX_WORDSTAT, IntegrationProvider.WORDSTAT],
         },
         isActive: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (!integration) return null;
+    if (!integration) {
+      this.logger.warn(`[WordstatProvider] No active Yandex Wordstat integration connection found in DB.`);
+      return null;
+    }
 
     try {
       const apiKey = this.encryption.decrypt(integration.encryptedKey, integration.iv, integration.authTag);
       const config = (integration.config as any) || {};
-      return { apiKey, folderId: config.folderId };
+      return { apiKey, folderId: config.folderId, provider: integration.provider };
     } catch (err: any) {
       this.logger.error(`[WordstatProvider] Failed to decrypt Yandex API key: ${err.message}`);
       return null;
@@ -85,6 +85,8 @@ export class YandexWordstatProvider implements ISemanticProvider {
       ...(folderId ? { folderId } : {}),
     };
 
+    this.logger.log(`[Yandex Wordstat Request] Phrase: "${phrase}", Auth: ${headers['Authorization'] ? 'Present' : 'Missing'}, FolderId: ${folderId || 'None'}`);
+
     try {
       // 1. Try Yandex Cloud Search API v2 Wordstat Endpoint
       let response = await fetch(this.cloudWordstatUrl, {
@@ -102,8 +104,13 @@ export class YandexWordstatProvider implements ISemanticProvider {
         });
       }
 
+      const respText = await response.text();
+      this.logger.log(`[Yandex Wordstat API Response Code ${response.status}] Content: ${respText.substring(0, 300)}`);
+
       if (response.ok) {
-        const data = await response.json();
+        let data: any = {};
+        try { data = JSON.parse(respText); } catch (_) {}
+
         const topRequests = (data.topRequests || []).map((item: any) => ({
           phrase: item.phrase || item.Phrase || '',
           count: Number(item.count || item.Shows || item.shows || 0),
@@ -114,17 +121,14 @@ export class YandexWordstatProvider implements ISemanticProvider {
           count: Number(item.count || item.Shows || item.shows || 0),
         }));
 
-        // Exact match or primary query count
+        // Find exact match or first top request count
         const exactMatch = topRequests.find((r: any) => r.phrase.toLowerCase() === phrase.toLowerCase());
         const volume = exactMatch ? exactMatch.count : topRequests[0]?.count || 0;
 
         return { volume, topRequests, similarRequests };
-      } else {
-        const errText = await response.text();
-        this.logger.warn(`[Yandex Wordstat API Response ${response.status}] ${errText.substring(0, 200)}`);
       }
     } catch (err: any) {
-      this.logger.error(`[Yandex Search API Wordstat Network Error] ${err.message}`);
+      this.logger.error(`[Yandex Search API Wordstat Error] ${err.message}`);
     }
 
     return { volume: 0, topRequests: [], similarRequests: [] };
@@ -155,7 +159,6 @@ export class YandexWordstatProvider implements ISemanticProvider {
     try {
       const xmlConn = await this.prisma.integrationConnection.findFirst({
         where: {
-          projectId,
           provider: IntegrationProvider.XMLSTOCK,
           isActive: true,
         },
@@ -181,9 +184,9 @@ export class YandexWordstatProvider implements ISemanticProvider {
     }
 
     return {
-      leftColumnSubQueries: [`${baseKeyword} купить`, `${baseKeyword} цена`, `${baseKeyword} под ключ`],
-      rightColumnSimilarQueries: [`оборудование для ${baseKeyword}`, `обслуживание ${baseKeyword}`],
-      allPhrases: [`${baseKeyword} купить`, `${baseKeyword} цена`, `оборудование для ${baseKeyword}`],
+      leftColumnSubQueries: [],
+      rightColumnSimilarQueries: [],
+      allPhrases: [],
     };
   }
 
@@ -212,11 +215,10 @@ export class YandexWordstatProvider implements ISemanticProvider {
       }
     }
 
-    // 2. XmlStock API Volume Lookup (if active XmlStock connection exists and phrase was not found)
+    // 2. XmlStock API Volume Lookup (if active XmlStock connection exists)
     try {
       const xmlConn = await this.prisma.integrationConnection.findFirst({
         where: {
-          projectId,
           provider: IntegrationProvider.XMLSTOCK,
           isActive: true,
         },
@@ -243,14 +245,10 @@ export class YandexWordstatProvider implements ISemanticProvider {
       this.logger.warn(`[WordstatProvider XmlStock Volume Lookup] ${err.message}`);
     }
 
-    // 3. Realistic Search Volume Calculation for User Keywords (when API key is not connected)
+    // Return exact volumes found (or 0 if missing/unauthorized)
     for (const kw of keywords) {
-      if (!result[kw] || result[kw] === 0) {
-        const words = kw.trim().split(/\s+/).filter(Boolean);
-        const lenFactor = Math.max(1, 8 - words.length);
-        const hash = kw.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        const baseVol = (hash % 38) * 110 + 380;
-        result[kw] = baseVol * lenFactor;
+      if (typeof result[kw] !== 'number') {
+        result[kw] = 0;
       }
     }
 

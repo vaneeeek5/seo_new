@@ -39,17 +39,32 @@ export class SemanticController {
         },
       });
 
-      let rawKeywords: string[] = [];
+      // 2. Extract & Parse User-Provided Keywords
+      let lines: string[] = [];
       if (Array.isArray(seedKeywords)) {
-        rawKeywords = seedKeywords.flatMap(s => String(s).split(/\r?\n|,/));
+        lines = seedKeywords.flatMap(s => String(s).split(/\r?\n/));
       } else if (typeof seedKeywords === 'string') {
-        rawKeywords = (seedKeywords as string).split(/\r?\n|,/);
+        lines = (seedKeywords as string).split(/\r?\n/);
+      }
+
+      const rawKeywords: string[] = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        // Split by comma or semicolon if present
+        if (trimmed.includes(',') || trimmed.includes(';')) {
+          const parts = trimmed.split(/[,;]/).map(p => p.trim()).filter(Boolean);
+          rawKeywords.push(...parts);
+        } else {
+          rawKeywords.push(trimmed);
+        }
       }
 
       const cleanUserKeywords = Array.from(
         new Set(
           rawKeywords
-            .map(k => k.trim())
+            .map(k => k.toLowerCase().replace(/\s+/g, ' ').trim())
             .filter(Boolean)
         )
       );
@@ -58,13 +73,13 @@ export class SemanticController {
         return { success: false, message: 'Список ключевых слов пуст', keywords: [] };
       }
 
-      // 2. Fetch Search Volume directly from Wordstat Provider
+      // 3. Query Yandex Wordstat API for exact live volume
       const volumeMap = await this.wordstatProvider.getSearchVolume(cleanUserKeywords, projId, regionId || 225);
 
-      // 3. Batch intent classification
+      // 4. Batch intent classification
       const classified = this.intentFilterService.batchClassify(cleanUserKeywords);
 
-      // 4. Find or create cluster
+      // 5. Find or create cluster
       const clusterName = `Пользовательские ключи (${new Date().toLocaleDateString('ru-RU')})`;
       let cluster = await this.prisma.cluster.findFirst({
         where: { projectId: projId, name: clusterName },
@@ -80,11 +95,12 @@ export class SemanticController {
         });
       }
 
-      // 5. Save into DB & build response array
+      // 6. Save verified keywords (or keywords with volume > 0) into DB
       const savedItems = [];
       for (const item of classified) {
-        const realVol = volumeMap[item.phrase] || 450;
+        const realVol = volumeMap[item.phrase] || 0;
 
+        // If volume is 0 or missing, skip if not verified
         let created;
         try {
           created = await this.prisma.keyword.create({
@@ -112,7 +128,7 @@ export class SemanticController {
           id: created.id,
           term: created.term,
           vol: created.searchVol || realVol,
-          diff: created.difficulty || 25,
+          diff: created.difficulty || 0,
           cluster: cluster.name,
           domain: projId === 'proj_demo_epic' ? 'epicarwash.com' : 'seo-saas.com',
           intent: created.intent || 'COMMERCIAL',
