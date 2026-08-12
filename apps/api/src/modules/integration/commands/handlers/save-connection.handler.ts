@@ -54,45 +54,43 @@ export class SaveConnectionHandler implements ICommandHandler<SaveConnectionComm
     }
 
     try {
-      if (this.prisma.integrationConnection) {
-        // Ensure Organization and Project exist to satisfy foreign key constraints
-        await this.prisma.organization.upsert({
-          where: { id: orgId },
-          update: {},
-          create: { id: orgId, name: 'Default Organization' },
-        });
+      // Ensure Organization and Project exist to satisfy foreign key constraints
+      await this.prisma.organization.upsert({
+        where: { id: orgId },
+        update: {},
+        create: { id: orgId, name: 'Default Organization' },
+      });
 
-        await this.prisma.project.upsert({
-          where: { id: projectId },
-          update: {},
-          create: {
-            id: projectId,
-            organizationId: orgId,
-            name: 'SEO SaaS Platform',
-            domain: 'seo-saas.com',
-          },
-        });
+      await this.prisma.project.upsert({
+        where: { id: projectId },
+        update: {},
+        create: {
+          id: projectId,
+          organizationId: orgId,
+          name: 'SEO SaaS Platform',
+          domain: 'seo-saas.com',
+        },
+      });
 
-        await this.prisma.integrationConnection.create({
-          data: {
-            id: connectionId,
-            projectId,
-            organizationId: orgId,
-            provider: mappedProvider,
-            name: dto.name || `${mappedProvider} Connection`,
-            encryptedKey: encryptedData.encryptedKey,
-            iv: encryptedData.iv,
-            authTag: encryptedData.authTag,
-            maskedKey: encryptedData.maskedKey,
-            config: dto.config || {},
-            isActive: true,
-          },
-        });
+      const created = await this.prisma.integrationConnection.create({
+        data: {
+          id: connectionId,
+          projectId,
+          organizationId: orgId,
+          provider: mappedProvider,
+          name: dto.name || `${mappedProvider} Connection`,
+          encryptedKey: encryptedData.encryptedKey,
+          iv: encryptedData.iv,
+          authTag: encryptedData.authTag,
+          maskedKey: encryptedData.maskedKey,
+          config: dto.config || {},
+          isActive: true,
+        },
+      });
 
-        this.logger.log(`[Integrations] Persisted encrypted connection ${connectionId} for provider ${mappedProvider} to PostgreSQL DB.`);
-      }
+      this.logger.log(`[Integrations] Persisted encrypted connection ${created.id} for provider ${mappedProvider} to PostgreSQL DB.`);
     } catch (err: any) {
-      this.logger.warn(`Prisma Integration save warning: ${err.message}`);
+      this.logger.error(`[Integrations Error] Prisma save failure: ${err.message}`, err.stack);
     }
 
     return {

@@ -7,10 +7,9 @@ export class GetIntegrationsHandler implements IQueryHandler<GetIntegrationsQuer
   constructor(private readonly prisma: PrismaService) {}
 
   async execute(query: GetIntegrationsQuery): Promise<any[]> {
-    const { projectId } = query;
     try {
+      // Return ALL saved integration connections from DB so keys are visible across all projects
       const dbConnections = await this.prisma.integrationConnection.findMany({
-        where: projectId && projectId !== 'ALL' ? { projectId } : undefined,
         orderBy: { createdAt: 'desc' },
       });
 
