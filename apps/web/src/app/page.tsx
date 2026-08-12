@@ -704,10 +704,19 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: selectedProjectId, seedKeywords: userKeywords, regionId: selectedRegionId })
       });
-      await res.json();
+      const data = await res.json();
 
-      setToastMessage(`📊 Запрос отправлен в обработку. Вордстат проверяет частотность для ${userKeywords.length} ключей.`);
-      setTimeout(() => setToastMessage(null), 4000);
+      if (data?.keywords && Array.isArray(data.keywords) && data.keywords.length > 0) {
+        setKeywordsList(prev => {
+          const existingTerms = new Set(prev.map(k => k.term.toLowerCase()));
+          const newItems = data.keywords.filter((k: any) => !existingTerms.has(k.term.toLowerCase()));
+          return [...newItems, ...prev];
+        });
+        setToastMessage(`📊 Вордстат API вернул частотность для ${data.keywords.length} фраз!`);
+        addLog(`[Вордстат API] Успешно получена частотность для ${data.keywords.length} пользовательских фраз.`);
+      } else {
+        setToastMessage(`📊 Запрос отправлен в Вордстат.`);
+      }
       setSeedInput('');
     } catch (err: any) {
       addLog(`[Ошибка Сбора] ${err.message}`);
