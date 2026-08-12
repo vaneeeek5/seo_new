@@ -8,10 +8,15 @@ export class GetIntegrationsHandler implements IQueryHandler<GetIntegrationsQuer
 
   async execute(query: GetIntegrationsQuery): Promise<any[]> {
     try {
-      // Return ALL saved integration connections from DB so keys are visible across all projects
-      const dbConnections = await this.prisma.integrationConnection.findMany({
-        orderBy: { createdAt: 'desc' },
-      });
+      // 3-second strict timeout to prevent DB connection hangs
+      const dbConnections = await Promise.race([
+        this.prisma.integrationConnection.findMany({
+          orderBy: { createdAt: 'desc' },
+        }),
+        new Promise<any[]>((_, reject) =>
+          setTimeout(() => reject(new Error('DB Timeout')), 3000)
+        ),
+      ]);
 
       return dbConnections.map((conn) => ({
         id: conn.id,
@@ -21,7 +26,7 @@ export class GetIntegrationsHandler implements IQueryHandler<GetIntegrationsQuer
         encryption: 'AES-256-GCM',
         status: conn.isActive ? 'CONNECTED' : 'DISABLED',
         isActive: conn.isActive,
-        date: conn.createdAt.toLocaleDateString('ru-RU'),
+        date: conn.createdAt ? new Date(conn.createdAt).toLocaleDateString('ru-RU') : new Date().toLocaleDateString('ru-RU'),
         config: conn.config,
       }));
     } catch (e) {

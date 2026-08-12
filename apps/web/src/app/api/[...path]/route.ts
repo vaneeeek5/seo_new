@@ -30,8 +30,8 @@ async function proxyToNestJS(request: NextRequest, path: string): Promise<NextRe
       method: request.method,
       headers,
       body,
-      signal: AbortSignal.timeout(12000),
-    }, 3, 500);
+      signal: AbortSignal.timeout(4000),
+    }, 2, 400);
 
     const responseText = await res.text();
     let responseData: unknown;
