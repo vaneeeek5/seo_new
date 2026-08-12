@@ -12,12 +12,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    try {
-      await this.$connect();
-      this.logger.log('Prisma Client connected to PostgreSQL database successfully.');
-    } catch (err: any) {
-      this.logger.warn(`Prisma Client connection warning: ${err.message}`);
-    }
+    // Non-blocking background database connection to ensure HTTP server starts instantly
+    this.$connect()
+      .then(() => {
+        this.logger.log('Prisma Client connected to PostgreSQL database successfully.');
+      })
+      .catch((err: any) => {
+        this.logger.warn(`Prisma Client background connection warning: ${err.message}`);
+      });
   }
 
   async onModuleDestroy() {
