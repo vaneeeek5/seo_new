@@ -35,7 +35,7 @@ async function proxyToNestJS(request: NextRequest, path: string): Promise<NextRe
       method: request.method,
       headers,
       body,
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(20000),
     }, 2, 300);
 
     const responseText = await res.text();
@@ -52,7 +52,6 @@ async function proxyToNestJS(request: NextRequest, path: string): Promise<NextRe
     const message = err instanceof Error ? err.message : 'unknown error';
     console.warn(`[Next.js API Proxy Warning] Path: ${path}, Fallback handler used: ${message}`);
 
-    // Graceful fallback for integrations to ensure UI never freezes or returns 503
     if (path.startsWith('integrations')) {
       if (request.method === 'POST') {
         let bodyJson: any = {};
