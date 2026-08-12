@@ -664,136 +664,38 @@ export default function DashboardPage() {
     }
   };
 
-  // Step 2: Smart Semantics Collection with Custom Niche Topics & Domain Mapping (5-Iteration Pipeline)
+  // Collect Search Volume ONLY for User-Provided Keywords
   const handleCollectSemantics = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!seedInput.trim()) {
+      setToastMessage('⚠️ Введите хотя бы одно ключевое слово.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
     try {
       const baseUrl = getApiBaseUrl();
-      const rawInput = seedInput.trim() || 'https://epicarwash.com';
+      // Split user keywords by line or comma
+      const userKeywords = seedInput
+        .split(/\r?\n|,/)
+        .map(s => s.trim())
+        .filter(Boolean);
 
-      // Detect Domain Name for keyword scoping
-      let targetDomainName = 'epicarwash.com';
-      if (rawInput.startsWith('http://') || rawInput.startsWith('https://') || rawInput.includes('.com') || rawInput.includes('.ru')) {
-        targetDomainName = rawInput.replace(/https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
-      }
-
-      const nicheData = extractNicheKeywords(rawInput);
-      
-      // Parse custom topics entered by user
-      const customTopics = nicheTopicsInput.split(',').map(s => s.trim()).filter(Boolean);
-      const allSeeds = [...nicheData.map(n => n.seed), ...customTopics];
+      if (userKeywords.length === 0) return;
 
       const selectedRegionName = REGION_OPTIONS.find(r => r.id === selectedRegionId)?.name || 'Россия';
-      addLog(`[7 Итераций Сбора] Запуск Super-Pipeline для сайта ${targetDomainName} (Проект ID: ${selectedProjectId}, Заданные темы: ${customTopics.length > 0 ? customTopics.join(', ') : 'Авто-определение'}, Регион: ${selectedRegionName})...`);
+      addLog(`[Сбор Частотности] Запрос частотности по ${userKeywords.length} пользовательским ключам (Проект: ${selectedProjectId}, Регион: ${selectedRegionName})...`);
 
       const res = await fetch(`${baseUrl}/semantics/collect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: selectedProjectId, seedKeywords: allSeeds, regionId: selectedRegionId })
+        body: JSON.stringify({ projectId: selectedProjectId, seedKeywords: userKeywords, regionId: selectedRegionId })
       });
       await res.json();
 
-      // Build clean human keywords list assigned to current targetDomainName
-      const newKeywords: Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; intent: 'COMMERCIAL' | 'INFORMATIONAL' | 'NAVIGATIONAL'; source: 'WORDSTAT' | 'SUGGEST' | 'COMPETITOR' | 'AI'; priority: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
-
-      // 1. Process Scraped Site Keywords (Left Column: Searches with Words + Right Column: Similar Queries)
-      nicheData.forEach((item, idx) => {
-        const baseVol = Math.floor(Math.random() * 3500) + 1200;
-        newKeywords.push({
-          id: `kw_${Date.now()}_${idx}`,
-          term: item.seed,
-          vol: baseVol,
-          diff: Math.floor(Math.random() * 35) + 15,
-          cluster: 'Оборудование и услуги',
-          domain: targetDomainName,
-          intent: 'COMMERCIAL',
-          source: 'COMPETITOR',
-          priority: 'HIGH',
-        });
-
-        // Левая колонка Вордстата: Запросы со словами (Точные вложенные фреймы)
-        item.leftColumn.forEach((leftKw, lidx) => {
-          const subVol = Math.floor(Math.random() * 1800) + 210;
-          const isComm = leftKw.includes('цена') || leftKw.includes('купить') || leftKw.includes('под ключ');
-          newKeywords.push({
-            id: `kw_left_${Date.now()}_${idx}_${lidx}`,
-            term: leftKw,
-            vol: subVol,
-            diff: Math.floor(Math.random() * 25) + 10,
-            cluster: isComm ? 'Цены и окупаемость' : 'Запросы со словами (Вордстат)',
-            domain: targetDomainName,
-            intent: isComm ? 'COMMERCIAL' : 'INFORMATIONAL',
-            source: 'WORDSTAT',
-            priority: subVol > 1000 ? 'HIGH' : 'MEDIUM',
-          });
-        });
-
-        // Правая колонка Вордстата: Похожие и ассоциированные запросы
-        item.rightColumn.forEach((rightKw, ridx) => {
-          const simVol = Math.floor(Math.random() * 2400) + 350;
-          const isComm = rightKw.includes('цена') || rightKw.includes('оборудование') || rightKw.includes('терминал');
-          newKeywords.push({
-            id: `kw_right_${Date.now()}_${idx}_${ridx}`,
-            term: rightKw,
-            vol: simVol,
-            diff: Math.floor(Math.random() * 30) + 15,
-            cluster: 'Похожие запросы (Вордстат)',
-            domain: targetDomainName,
-            intent: isComm ? 'COMMERCIAL' : 'INFORMATIONAL',
-            source: 'WORDSTAT',
-            priority: simVol > 1200 ? 'HIGH' : 'MEDIUM',
-          });
-        });
-      });
-
-      // 2. Process Custom User Topics & Generate Deep LSI
-      customTopics.forEach((top, tidx) => {
-        const topVol = Math.floor(Math.random() * 4200) + 1500;
-        newKeywords.push({
-          id: `kw_custom_${Date.now()}_${tidx}`,
-          term: top,
-          vol: topVol,
-          diff: Math.floor(Math.random() * 40) + 15,
-          cluster: 'Заданные темы сайта',
-          domain: targetDomainName,
-          intent: 'COMMERCIAL',
-          source: 'COMPETITOR',
-          priority: 'HIGH',
-        });
-
-        const customLsi = [
-          `${top} купить под ключ`,
-          `${top} цена и окупаемость`,
-          `${top} оборудование от производителя`,
-          `${top} отзывы клиентов`,
-          `стоимость ${top} 2026`,
-          `лучший ${top} рекомендации`,
-          `монтаж и обслуживание ${top}`,
-          `${top} рядом в москве`,
-        ];
-
-        customLsi.forEach((clsi, clidx) => {
-          const clsiVol = Math.floor(Math.random() * 1900) + 240;
-          const isComm = clsi.includes('цена') || clsi.includes('купить') || clsi.includes('стоимость');
-          const isNav = clsi.includes('рядом');
-          newKeywords.push({
-            id: `kw_custom_${Date.now()}_${tidx}_lsi_${clidx}`,
-            term: clsi,
-            vol: clsiVol,
-            diff: Math.floor(Math.random() * 28) + 12,
-            cluster: isComm ? 'Цены и окупаемость' : 'Заданные темы сайта',
-            domain: targetDomainName,
-            intent: isNav ? 'NAVIGATIONAL' : isComm ? 'COMMERCIAL' : 'INFORMATIONAL',
-            source: isNav ? 'SUGGEST' : 'AI',
-            priority: clsiVol > 1000 ? 'HIGH' : 'MEDIUM',
-          });
-        });
-      });
-
-      setKeywordsList(prev => [...newKeywords, ...prev]);
-      setFilterDomain(targetDomainName);
+      setToastMessage(`📊 Запрос отправлен в обработку. Вордстат проверяет частотность для ${userKeywords.length} ключей.`);
+      setTimeout(() => setToastMessage(null), 4000);
       setSeedInput('');
-      setNicheTopicsInput('');
     } catch (err: any) {
       addLog(`[Ошибка Сбора] ${err.message}`);
     }
@@ -1560,29 +1462,21 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Form with Seed URL, Custom Niche Topics & Region Selector */}
+          {/* Form for User Keywords Search Volume Collection */}
           <form onSubmit={handleCollectSemantics} style={{ margin: '16px 0 24px', background: '#1f2937', padding: '20px', borderRadius: '10px', border: '1px solid #374151' }}>
-            <h3 style={{ fontSize: '14px', color: '#fff', marginTop: 0, marginBottom: '12px' }}>Параметры многоэтапного сбора семантики (5 итераций AI + Wordstat)</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 180px', gap: '12px' }}>
+            <h3 style={{ fontSize: '15px', color: '#38bdf8', marginTop: 0, marginBottom: '8px' }}>📊 Сбор Частотности по Вашему Списку Ключевых Слов (Wordstat / XmlStock API)</h3>
+            <p style={{ fontSize: '13px', color: '#9ca3af', marginTop: 0, marginBottom: '14px' }}>
+              Вставьте ваши ключевые фразы ниже (по одной на строку или через запятую). Система сделает прямой запрос к Вордстат API и занесет в ядро только фразы с подтвержденной частотностью (показы &gt; 0).
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px 180px', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>🌐 Ссылка на сайт (URL)</label>
-                <input
-                  type="text"
-                  placeholder="https://epicarwash.com"
+                <label style={{ display: 'block', fontSize: '12px', color: '#38bdf8', marginBottom: '4px' }}>📝 Список ваших ключевых слов</label>
+                <textarea
+                  rows={3}
+                  placeholder="роботизированная автомойка&#10;робот мойка купить оборудование&#10;автомойка самообслуживания цена"
                   value={seedInput}
                   onChange={(e) => setSeedInput(e.target.value)}
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #374151', background: '#111827', color: '#fff', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#38bdf8', marginBottom: '4px' }}>🎯 Тематики сайта / Основные темы (через запятую)</label>
-                <input
-                  type="text"
-                  placeholder="роботизированная автомойка, мойка самообслуживания, оборудование"
-                  value={nicheTopicsInput}
-                  onChange={(e) => setNicheTopicsInput(e.target.value)}
-                  style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #0284c7', background: '#111827', color: '#fff', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #0284c7', background: '#111827', color: '#fff', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box' }}
                 />
               </div>
 
@@ -1600,8 +1494,8 @@ export default function DashboardPage() {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button type="submit" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: '#0d9488', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
-                  🚀 Сбор (5 итераций)
+                <button type="submit" style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', background: '#0284c7', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+                  📊 Запросить частотность
                 </button>
               </div>
             </div>

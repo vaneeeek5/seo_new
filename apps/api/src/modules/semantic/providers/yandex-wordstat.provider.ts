@@ -6,8 +6,8 @@ import { XmlStockProvider } from './xmlstock.provider';
 import { IntegrationProvider } from '@prisma/client';
 
 export interface WordstatParsedResult {
-  leftColumnSubQueries: string[];   // Запросы со словами (левая колонка Вордстата)
-  rightColumnSimilarQueries: string[]; // Похожие и ассоциированные запросы (правая колонка Вордстата)
+  leftColumnSubQueries: string[];
+  rightColumnSimilarQueries: string[];
   allPhrases: string[];
 }
 
@@ -38,13 +38,10 @@ export class YandexWordstatProvider implements ISemanticProvider {
       },
     });
 
-    if (!integration) {
-      return null;
-    }
+    if (!integration) return null;
 
     try {
-      const apiKey = this.encryption.decrypt(integration.encryptedKey, integration.iv, integration.authTag);
-      return apiKey;
+      return this.encryption.decrypt(integration.encryptedKey, integration.iv, integration.authTag);
     } catch (err: any) {
       this.logger.error(`[WordstatProvider] Failed to decrypt Yandex API key: ${err.message}`);
       return null;
@@ -52,12 +49,12 @@ export class YandexWordstatProvider implements ISemanticProvider {
   }
 
   /**
-   * Retrieves both Left Column ("Запросы со словами") AND Right Column ("Похожие запросы") from Wordstat API.
+   * Retrieves Left and Right columns from Wordstat API.
    */
   async getSimilarKeywordsWithColumns(baseKeyword: string, projectId?: string, regionId: number = 225): Promise<WordstatParsedResult> {
     this.logger.log(`[WordstatProvider API] Fetching Left & Right column queries for "${baseKeyword}"...`);
 
-    // 1. Check for XMLSTOCK connection first
+    // 1. XmlStock connection
     try {
       const xmlConn = await this.prisma.integrationConnection.findFirst({
         where: {
@@ -72,23 +69,21 @@ export class YandexWordstatProvider implements ISemanticProvider {
         const config = (xmlConn.config as any) || {};
         const xmlStockData = await this.xmlStockProvider.getWordstatData(
           baseKeyword,
-          { userId: config.userId || 'xml_user_1029', key: decryptedKey, ...config },
+          { userId: config.userId || '', key: decryptedKey, ...config },
           regionId
         );
 
-        if (xmlStockData.leftColumnSubQueries.length > 0 || xmlStockData.rightColumnSimilarQueries.length > 0) {
-          return {
-            leftColumnSubQueries: xmlStockData.leftColumnSubQueries,
-            rightColumnSimilarQueries: xmlStockData.rightColumnSimilarQueries,
-            allPhrases: Array.from(new Set([...xmlStockData.leftColumnSubQueries, ...xmlStockData.rightColumnSimilarQueries])),
-          };
-        }
+        return {
+          leftColumnSubQueries: xmlStockData.leftColumnSubQueries || [],
+          rightColumnSimilarQueries: xmlStockData.rightColumnSimilarQueries || [],
+          allPhrases: Array.from(new Set([...(xmlStockData.leftColumnSubQueries || []), ...(xmlStockData.rightColumnSimilarQueries || [])])),
+        };
       }
     } catch (err: any) {
       this.logger.warn(`[WordstatProvider XmlStock Column Lookup] ${err.message}`);
     }
 
-    // 2. Direct Yandex Wordstat API (if YANDEX_WORDSTAT connection exists)
+    // 2. Direct Yandex Wordstat API
     const apiKey = await this.getDecryptedApiKey(projectId);
     const leftColumn: string[] = [];
     const rightColumn: string[] = [];
@@ -115,50 +110,16 @@ export class YandexWordstatProvider implements ISemanticProvider {
           if (data?.result?.SearchesWithSimilarWords) {
             data.result.SearchesWithSimilarWords.forEach((p: any) => rightColumn.push(p.Phrase));
           }
-
-          if (leftColumn.length > 0 || rightColumn.length > 0) {
-            return {
-              leftColumnSubQueries: leftColumn,
-              rightColumnSimilarQueries: rightColumn,
-              allPhrases: Array.from(new Set([...leftColumn, ...rightColumn])),
-            };
-          }
         }
       } catch (error: any) {
         this.logger.error(`[Yandex API Error] Failed GetTop query for "${baseKeyword}": ${error.message}`);
       }
     }
 
-    // Realistic Fallback (Left & Right columns)
-    const baseClean = baseKeyword.toLowerCase().trim();
-    const simulatedLeft = [
-      `${baseClean}`,
-      `${baseClean} купить`,
-      `цена ${baseClean}`,
-      `${baseClean} под ключ`,
-      `конструкторская документация ${baseClean}`,
-      `${baseClean} рядом`,
-      `${baseClean} грузовые`,
-      `бизнес план ${baseClean}`,
-      `производитель ${baseClean}`,
-      `отзывы владельцев ${baseClean}`,
-    ];
-
-    const simulatedRight = [
-      `бесконтактная мойка кузова`,
-      `оборудование для автомойки самообслуживания`,
-      `поворотный моечный манипулятор 360`,
-      `моечный бокс высокого давления`,
-      `автохимия и активная эмульсия`,
-      `очистные сооружения автомойки`,
-      `терминал приема карт и СБП`,
-      `сушильная установка турбо-обдув`,
-    ];
-
     return {
-      leftColumnSubQueries: simulatedLeft,
-      rightColumnSimilarQueries: simulatedRight,
-      allPhrases: Array.from(new Set([...simulatedLeft, ...simulatedRight])),
+      leftColumnSubQueries: leftColumn,
+      rightColumnSimilarQueries: rightColumn,
+      allPhrases: Array.from(new Set([...leftColumn, ...rightColumn])),
     };
   }
 
@@ -168,12 +129,17 @@ export class YandexWordstatProvider implements ISemanticProvider {
   }
 
   /**
-   * Retrieves exact monthly search volume (shows/month) from Wordstat / XmlStock API.
-   * If a phrase does NOT exist in Wordstat or has 0 shows, it returns 0 (so it gets dropped).
+   * Retrieves exact monthly search volume (shows/month) from Wordstat / XmlStock API for user keywords.
+   * ABSOLUTELY NO FAKE RANDOM NUMBERS. If key is missing or phrase has 0 shows, returns 0.
    */
   async getSearchVolume(keywords: string[], projectId?: string, regionId: number = 225): Promise<Record<string, number>> {
     const result: Record<string, number> = {};
     if (!keywords || keywords.length === 0) return result;
+
+    // Initialize all keywords with 0 volume
+    for (const kw of keywords) {
+      result[kw] = 0;
+    }
 
     // 1. XmlStock API Volume Lookup
     try {
@@ -192,10 +158,9 @@ export class YandexWordstatProvider implements ISemanticProvider {
         for (const kw of keywords) {
           const xmlData = await this.xmlStockProvider.getWordstatData(
             kw,
-            { userId: config.userId || 'xml_user_1029', key: decryptedKey, ...config },
+            { userId: config.userId || '', key: decryptedKey, ...config },
             regionId
           );
-          // Zero-tolerance: if phrase has no volume or 0 volume, set 0
           result[kw] = (xmlData.volume && xmlData.volume > 0) ? xmlData.volume : 0;
         }
         return result;
@@ -226,33 +191,11 @@ export class YandexWordstatProvider implements ISemanticProvider {
             for (const item of data.result.Phrases) {
               result[item.Phrase] = item.Shows || 0;
             }
-            // Any phrase not returned by Wordstat gets 0
-            for (const kw of keywords) {
-              if (typeof result[kw] !== 'number') {
-                result[kw] = 0;
-              }
-            }
-            return result;
           }
         }
       } catch (error: any) {
         this.logger.error(`[Yandex API Error] Failed GetDynamics query: ${error.message}`);
       }
-    }
-
-    // 3. Realistic Fallback: Only return non-zero for valid Wordstat search queries
-    for (let i = 0; i < keywords.length; i++) {
-      const kw = keywords[i];
-      const words = kw.trim().split(/\s+/);
-      // Discard invalid phrases or phrases with bad syntax
-      if (words.length > 7 || words.length < 1) {
-        result[kw] = 0;
-        continue;
-      }
-
-      const hash = kw.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      const val = (hash % 42) * 90 + 150;
-      result[kw] = val;
     }
 
     return result;
