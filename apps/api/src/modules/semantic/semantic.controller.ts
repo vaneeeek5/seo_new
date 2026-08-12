@@ -20,6 +20,44 @@ export class SemanticController {
     private readonly prisma: PrismaService,
   ) {}
 
+  @Get('wordstat-status')
+  async getWordstatStatus(@Query('projectId') projectId?: string) {
+    try {
+      const activeConnection = await this.prisma.integrationConnection.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!activeConnection) {
+        return {
+          connected: false,
+          statusMessage: '❌ Активные интеграционные ключи в базе данных не найдены.',
+          details: 'Добавьте API ключ на странице "Центр Интеграций".',
+        };
+      }
+
+      // Test live call for keyword "автомойка"
+      const testVolume = await this.wordstatProvider.getSearchVolume(['автомойка'], projectId || 'proj_demo_1', 225);
+      const vol = testVolume['автомойка'] || 0;
+
+      return {
+        connected: true,
+        provider: activeConnection.provider,
+        maskedKey: activeConnection.maskedKey,
+        testKeyword: 'автомойка',
+        volume: vol,
+        statusMessage: vol > 0
+          ? `✅ Успешное подключение к Yandex Search API Wordstat! Найдена частотность: ${vol} показов/мес.`
+          : `⚠️ Ключ зашифрован в БД (${activeConnection.maskedKey}), но API вернуло 0. Проверьте права и баланс API-ключа в Yandex Cloud.`,
+      };
+    } catch (err: any) {
+      return {
+        connected: false,
+        statusMessage: `❌ Ошибка проверки подключения: ${err.message}`,
+      };
+    }
+  }
+
   @Post('collect')
   @HttpCode(HttpStatus.OK)
   async collectSemantics(@Body() dto: CollectSemanticDto) {
@@ -52,7 +90,6 @@ export class SemanticController {
         const trimmed = line.trim();
         if (!trimmed) continue;
 
-        // Split by comma or semicolon if present
         if (trimmed.includes(',') || trimmed.includes(';')) {
           const parts = trimmed.split(/[,;]/).map(p => p.trim()).filter(Boolean);
           rawKeywords.push(...parts);
@@ -95,12 +132,11 @@ export class SemanticController {
         });
       }
 
-      // 6. Save verified keywords (or keywords with volume > 0) into DB
+      // 6. Save verified keywords into DB
       const savedItems = [];
       for (const item of classified) {
         const realVol = volumeMap[item.phrase] || 0;
 
-        // If volume is 0 or missing, skip if not verified
         let created;
         try {
           created = await this.prisma.keyword.create({
@@ -194,7 +230,6 @@ export class SemanticController {
     const projectId = queryProjectId || body?.projectId || 'proj_demo_1';
 
     try {
-      // Clean up keywords and clusters unconditionally for project
       const deletedKeywords = await this.prisma.keyword.deleteMany({
         where: {
           OR: [
