@@ -204,19 +204,60 @@ export default function DashboardPage() {
 
   // Phase 3 Autopilot & Limit Sliders State
   const [autopilotEnabled, setAutopilotEnabled] = useState<boolean>(true);
-  const [articlesPerDay, setArticlesPerDay] = useState<number>(2);
-  const [articlesPerWeek, setArticlesPerWeek] = useState<number>(10);
+  const [articlesPerDay, setArticlesPerDay] = useState<number>(() => {
+    if (typeof window !== 'undefined') return Number(localStorage.getItem('articlesPerDay')) || 2;
+    return 2;
+  });
+  const [articlesPerWeek, setArticlesPerWeek] = useState<number>(() => {
+    if (typeof window !== 'undefined') return Number(localStorage.getItem('articlesPerWeek')) || 10;
+    return 10;
+  });
+
+  const handleArticlesPerDayChange = (val: number) => {
+    setArticlesPerDay(val);
+    if (typeof window !== 'undefined') localStorage.setItem('articlesPerDay', String(val));
+  };
+
+  const handleArticlesPerWeekChange = (val: number) => {
+    setArticlesPerWeek(val);
+    if (typeof window !== 'undefined') localStorage.setItem('articlesPerWeek', String(val));
+  };
 
   // Project State & Active Global Project Selector
   const [projectName, setProjectName] = useState('');
   const [domain, setDomain] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('proj_demo_1');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('selectedProjectId') || 'proj_demo_1';
+    return 'proj_demo_1';
+  });
   const [createdProjects, setCreatedProjects] = useState<Array<{ id: string; name: string; domain: string; date: string }>>([
     { id: 'proj_demo_1', name: 'SEO SaaS Platform', domain: 'seo-saas.com', date: new Date().toLocaleDateString() },
     { id: 'proj_demo_epic', name: 'Epic Car Wash', domain: 'epicarwash.com', date: new Date().toLocaleDateString() }
   ]);
 
-  // Integrations State (Step 1: Delete support & XmlStock Toggles)
+  const handleSelectProject = (id: string) => {
+    setSelectedProjectId(id);
+    if (typeof window !== 'undefined') localStorage.setItem('selectedProjectId', id);
+  };
+
+  // Fetch created projects from Prisma DB on mount
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/projects`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setCreatedProjects(data);
+          }
+        }
+      } catch (err) {}
+    };
+    fetchProjects();
+  }, []);
+
+  // Integrations State
   const [providerSelect, setProviderSelect] = useState<'YANDEX_WORDSTAT' | 'METRIKA' | 'GEMINI' | 'OPENAI' | 'ANTHROPIC' | 'WORDSTAT' | 'WORDPRESS_CMS' | 'XMLSTOCK'>('XMLSTOCK');
   const [connectionName, setConnectionName] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -250,17 +291,15 @@ export default function DashboardPage() {
             setConnectionsList(data);
           }
         }
-      } catch (err) {
-        // Quiet
-      }
+      } catch (err) {}
     };
     fetchIntegrations();
   }, [selectedProjectId]);
 
-  // Semantics State (Step 2: Region, Volumes, Priority, Exclusion, Domain Filter, Niche Topics)
+  // Semantics State
   const [seedInput, setSeedInput] = useState('');
   const [nicheTopicsInput, setNicheTopicsInput] = useState('');
-  const [selectedRegionId, setSelectedRegionId] = useState<number>(225); // Default: Россия (225)
+  const [selectedRegionId, setSelectedRegionId] = useState<number>(225);
   const [sortByVol, setSortByVol] = useState<'desc' | 'asc'>('desc');
   const [filterDomain, setFilterDomain] = useState<string>('ALL');
   const [filterCluster, setFilterCluster] = useState<string>('ALL');
@@ -280,14 +319,12 @@ export default function DashboardPage() {
             setKeywordsList(data);
           }
         }
-      } catch (err) {
-        // Quiet
-      }
+      } catch (err) {}
     };
     fetchSavedKeywords();
   }, [selectedProjectId]);
 
-  // Content Generation State (Step 3 & 4: Edit/Preview, Multi-stage generation UI & Options)
+  // Content Generation State
   const [topicInput, setTopicInput] = useState('');
   const [primaryKwInput, setPrimaryKwInput] = useState('');
   const [generationStage, setGenerationStage] = useState<number>(0);
@@ -323,6 +360,25 @@ export default function DashboardPage() {
   const [isEditingArticle, setIsEditingArticle] = useState<boolean>(false);
   const [editedBody, setEditedBody] = useState<string>(initialArticle.body);
 
+  // Fetch articles from Prisma DB for selected project
+  useEffect(() => {
+    const fetchArticles = async () => {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/content/articles/${selectedProjectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setGeneratedArticles(data);
+            setSelectedArticle(data[0]);
+            setEditedBody(data[0].body);
+          }
+        }
+      } catch (err) {}
+    };
+    fetchArticles();
+  }, [selectedProjectId]);
+
   // RAG Knowledge State
   const [knowledgeTitle, setKnowledgeTitle] = useState('');
   const [knowledgeContent, setKnowledgeContent] = useState('');
@@ -330,10 +386,27 @@ export default function DashboardPage() {
     { id: 'knode_1', title: 'Глоссарий бренда и tone of voice', content: 'Использовать профессиональный стиль, фокусироваться на метриках окупаемости.', date: new Date().toLocaleDateString() }
   ]);
 
+  // Fetch knowledge nodes from Prisma DB for selected project
+  useEffect(() => {
+    const fetchKnowledge = async () => {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/knowledge/${selectedProjectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setKnowledgeNodes(data);
+          }
+        }
+      } catch (err) {}
+    };
+    fetchKnowledge();
+  }, [selectedProjectId]);
+
   // Decision Engine State
   const [decisionResult, setDecisionResult] = useState<any>(null);
 
-  // Rank Tracker State & Handlers
+  // Rank Tracker State
   const [rankHistoryList, setRankHistoryList] = useState<Array<{ id: string; term: string; pos: number; prevPos: number; url: string; date: string }>>([
     { id: 'rk_1', term: 'роботизированная автомойка', pos: 3, prevPos: 5, url: 'https://epicarwash.com/catalog/robot', date: new Date().toLocaleDateString() },
     { id: 'rk_2', term: 'робот мойка купить оборудование', pos: 5, prevPos: 9, url: 'https://epicarwash.com/oborudovanie', date: new Date().toLocaleDateString() },
@@ -341,6 +414,23 @@ export default function DashboardPage() {
     { id: 'rk_4', term: 'роботизированная мойка под ключ', pos: 8, prevPos: 7, url: 'https://epicarwash.com/pod-klyuch', date: new Date().toLocaleDateString() },
   ]);
   const [rankTrackingRunning, setRankTrackingRunning] = useState<boolean>(false);
+
+  // Fetch rank history from Prisma DB for selected project
+  useEffect(() => {
+    const fetchRankHistory = async () => {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/semantics/rank-history/${selectedProjectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setRankHistoryList(data);
+          }
+        }
+      } catch (err) {}
+    };
+    fetchRankHistory();
+  }, [selectedProjectId]);
 
   // Competitor Analysis State & Handlers
   const [competitorAnalysisData, setCompetitorAnalysisData] = useState<any>({
@@ -674,17 +764,18 @@ export default function DashboardPage() {
     if (!projectName || !domain) return;
     try {
       const baseUrl = getApiBaseUrl();
+      const newProjId = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
       const res = await fetch(`${baseUrl}/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: projectName, domain, organizationId: 'org_demo_1' })
+        body: JSON.stringify({ id: newProjId, name: projectName, domain, organizationId: 'org_demo_1' })
       });
       const data = await res.json();
-      const newProjId = data.projectId || `proj_${Date.now()}`;
-      addLog(`[Команда] CreateProject -> Активный проект переключен на: ${projectName} (${domain})`);
-      const newProjObj = { id: newProjId, name: projectName, domain, date: new Date().toLocaleDateString() };
-      setCreatedProjects(prev => [newProjObj, ...prev]);
-      setSelectedProjectId(newProjId);
+      const actualProjId = data.id || newProjId;
+      addLog(`[Команда] CreateProject -> Создан и сохранен проект в БД: ${projectName} (${domain})`);
+      const newProjObj = { id: actualProjId, name: projectName, domain, date: new Date().toLocaleDateString('ru-RU') };
+      setCreatedProjects(prev => [newProjObj, ...prev.filter(p => p.id !== actualProjId)]);
+      handleSelectProject(actualProjId);
       setProjectName('');
       setDomain('');
     } catch (err: any) {
@@ -948,7 +1039,7 @@ export default function DashboardPage() {
             <select
               value={selectedProjectId}
               onChange={(e) => {
-                setSelectedProjectId(e.target.value);
+                handleSelectProject(e.target.value);
                 const selectedP = createdProjects.find(p => p.id === e.target.value);
                 if (selectedP) {
                   addLog(`[Переключение] Активный проект переключен на: ${selectedP.name} (${selectedP.domain})`);
@@ -1381,7 +1472,7 @@ export default function DashboardPage() {
                   min="1"
                   max="10"
                   value={articlesPerDay}
-                  onChange={(e) => setArticlesPerDay(parseInt(e.target.value, 10))}
+                  onChange={(e) => handleArticlesPerDayChange(parseInt(e.target.value, 10))}
                   style={{ width: '100%', cursor: 'pointer' }}
                 />
               </div>
@@ -1395,7 +1486,7 @@ export default function DashboardPage() {
                   min="1"
                   max="50"
                   value={articlesPerWeek}
-                  onChange={(e) => setArticlesPerWeek(parseInt(e.target.value, 10))}
+                  onChange={(e) => handleArticlesPerWeekChange(parseInt(e.target.value, 10))}
                   style={{ width: '100%', cursor: 'pointer' }}
                 />
               </div>
