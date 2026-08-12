@@ -26,21 +26,30 @@ export class YandexWordstatProvider implements ISemanticProvider {
   ) {}
 
   /**
-   * Retrieves and decrypts Yandex Wordstat API key & folderId from database.
+   * Retrieves and decrypts active Yandex Wordstat / XmlStock API key & folderId from database.
    */
   private async getDecryptedIntegration(projectId?: string): Promise<{ apiKey: string; folderId?: string; provider: string } | null> {
-    const integration = await this.prisma.integrationConnection.findFirst({
+    // 1. Try Yandex Wordstat or XmlStock active connection
+    let integration = await this.prisma.integrationConnection.findFirst({
       where: {
         provider: {
-          in: [IntegrationProvider.YANDEX_WORDSTAT, IntegrationProvider.WORDSTAT],
+          in: [IntegrationProvider.YANDEX_WORDSTAT, IntegrationProvider.WORDSTAT, IntegrationProvider.XMLSTOCK],
         },
         isActive: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
+    // 2. Fallback: check if ANY active connection exists in DB
     if (!integration) {
-      this.logger.warn(`[WordstatProvider] No active Yandex Wordstat integration connection found in DB.`);
+      integration = await this.prisma.integrationConnection.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    if (!integration) {
+      this.logger.warn(`[WordstatProvider] No active integration connection found in DB.`);
       return null;
     }
 
@@ -49,7 +58,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
       const config = (integration.config as any) || {};
       return { apiKey, folderId: config.folderId, provider: integration.provider };
     } catch (err: any) {
-      this.logger.error(`[WordstatProvider] Failed to decrypt Yandex API key: ${err.message}`);
+      this.logger.error(`[WordstatProvider] Failed to decrypt API key: ${err.message}`);
       return null;
     }
   }
@@ -62,20 +71,25 @@ export class YandexWordstatProvider implements ISemanticProvider {
     apiKey: string,
     folderId?: string,
     regionId: number = 225
-  ): Promise<{ volume: number; topRequests: Array<{ phrase: string; count: number }>; similarRequests: Array<{ phrase: string; count: number }> }> {
-    const headers: Record<string, string> = {
+  ): Promise<{ volume: number; topRequests: Array<{ phrase: string; count: number }>; similarRequests: Array<{ phrase: string; count: number }>; rawStatus?: number; rawMessage?: string }> {
+    const cleanKey = apiKey.trim();
+    const headersList: Array<Record<string, string>> = [];
+
+    // Header option A: Api-Key
+    const headersA: Record<string, string> = {
       'Content-Type': 'application/json',
+      'Authorization': cleanKey.startsWith('Api-Key ') ? cleanKey : `Api-Key ${cleanKey}`,
     };
+    if (folderId) headersA['x-folder-id'] = folderId;
+    headersList.push(headersA);
 
-    if (apiKey.startsWith('AQVN') || apiKey.startsWith('t1.')) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else {
-      headers['Authorization'] = `Api-Key ${apiKey}`;
-    }
-
-    if (folderId) {
-      headers['x-folder-id'] = folderId;
-    }
+    // Header option B: Bearer
+    const headersB: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': cleanKey.startsWith('Bearer ') ? cleanKey : `Bearer ${cleanKey}`,
+    };
+    if (folderId) headersB['x-folder-id'] = folderId;
+    headersList.push(headersB);
 
     const payload = {
       phrase,
@@ -85,53 +99,50 @@ export class YandexWordstatProvider implements ISemanticProvider {
       ...(folderId ? { folderId } : {}),
     };
 
-    this.logger.log(`[Yandex Wordstat Request] Phrase: "${phrase}", Auth: ${headers['Authorization'] ? 'Present' : 'Missing'}, FolderId: ${folderId || 'None'}`);
+    let lastStatus = 0;
+    let lastMsg = '';
 
-    try {
-      // 1. Try Yandex Cloud Search API v2 Wordstat Endpoint
-      let response = await fetch(this.cloudWordstatUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-
-      // 2. Fallback to Legacy Wordstat API v1 Endpoint
-      if (!response.ok) {
-        response = await fetch(this.legacyWordstatUrl, {
+    for (const headers of headersList) {
+      this.logger.log(`[Yandex Wordstat Request] Phrase: "${phrase}", Auth: ${headers['Authorization'].substring(0, 15)}...`);
+      try {
+        const response = await fetch(this.cloudWordstatUrl, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ phrase, numPhrases: 50, regions: [regionId] }),
+          body: JSON.stringify(payload),
         });
+
+        const respText = await response.text();
+        lastStatus = response.status;
+        lastMsg = respText;
+
+        this.logger.log(`[Yandex Wordstat API Response HTTP ${response.status}] ${respText.substring(0, 300)}`);
+
+        if (response.ok) {
+          let data: any = {};
+          try { data = JSON.parse(respText); } catch (_) {}
+
+          const topRequests = (data.topRequests || []).map((item: any) => ({
+            phrase: item.phrase || item.Phrase || '',
+            count: Number(item.count || item.Shows || item.shows || 0),
+          }));
+
+          const similarRequests = (data.similarRequests || []).map((item: any) => ({
+            phrase: item.phrase || item.Phrase || '',
+            count: Number(item.count || item.Shows || item.shows || 0),
+          }));
+
+          const exactMatch = topRequests.find((r: any) => r.phrase.toLowerCase() === phrase.toLowerCase());
+          const volume = exactMatch ? exactMatch.count : topRequests[0]?.count || 0;
+
+          return { volume, topRequests, similarRequests, rawStatus: response.status, rawMessage: respText };
+        }
+      } catch (err: any) {
+        lastMsg = err.message;
+        this.logger.error(`[Yandex Search API Wordstat Error] ${err.message}`);
       }
-
-      const respText = await response.text();
-      this.logger.log(`[Yandex Wordstat API Response Code ${response.status}] Content: ${respText.substring(0, 300)}`);
-
-      if (response.ok) {
-        let data: any = {};
-        try { data = JSON.parse(respText); } catch (_) {}
-
-        const topRequests = (data.topRequests || []).map((item: any) => ({
-          phrase: item.phrase || item.Phrase || '',
-          count: Number(item.count || item.Shows || item.shows || 0),
-        }));
-
-        const similarRequests = (data.similarRequests || []).map((item: any) => ({
-          phrase: item.phrase || item.Phrase || '',
-          count: Number(item.count || item.Shows || item.shows || 0),
-        }));
-
-        // Find exact match or first top request count
-        const exactMatch = topRequests.find((r: any) => r.phrase.toLowerCase() === phrase.toLowerCase());
-        const volume = exactMatch ? exactMatch.count : topRequests[0]?.count || 0;
-
-        return { volume, topRequests, similarRequests };
-      }
-    } catch (err: any) {
-      this.logger.error(`[Yandex Search API Wordstat Error] ${err.message}`);
     }
 
-    return { volume: 0, topRequests: [], similarRequests: [] };
+    return { volume: 0, topRequests: [], similarRequests: [], rawStatus: lastStatus, rawMessage: lastMsg };
   }
 
   /**
