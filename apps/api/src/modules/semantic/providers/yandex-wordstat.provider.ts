@@ -14,7 +14,11 @@ export interface WordstatParsedResult {
 @Injectable()
 export class YandexWordstatProvider implements ISemanticProvider {
   private readonly logger = new Logger(YandexWordstatProvider.name);
-  private readonly yandexApiUrl = 'https://api.direct.yandex.ru/v5/wordstat';
+
+  // Official Endpoints for Yandex AI Studio / Yandex Cloud Search API Wordstat
+  private readonly cloudWordstatUrl = 'https://searchapi.api.cloud.yandex.net/v2/wordstat/topRequests';
+  private readonly legacyWordstatUrl = 'https://api.wordstat.yandex.net/v1/topRequests';
+  private readonly yandexDirectUrl = 'https://api.direct.yandex.ru/v5/wordstat';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -23,9 +27,9 @@ export class YandexWordstatProvider implements ISemanticProvider {
   ) {}
 
   /**
-   * Retrieves and decrypts Yandex Wordstat API key from database for given projectId.
+   * Retrieves and decrypts Yandex Wordstat API key & folderId from database for given projectId.
    */
-  private async getDecryptedApiKey(projectId?: string): Promise<string | null> {
+  private async getDecryptedIntegration(projectId?: string): Promise<{ apiKey: string; folderId?: string } | null> {
     if (!projectId) return null;
 
     const integration = await this.prisma.integrationConnection.findFirst({
@@ -41,7 +45,9 @@ export class YandexWordstatProvider implements ISemanticProvider {
     if (!integration) return null;
 
     try {
-      return this.encryption.decrypt(integration.encryptedKey, integration.iv, integration.authTag);
+      const apiKey = this.encryption.decrypt(integration.encryptedKey, integration.iv, integration.authTag);
+      const config = (integration.config as any) || {};
+      return { apiKey, folderId: config.folderId };
     } catch (err: any) {
       this.logger.error(`[WordstatProvider] Failed to decrypt Yandex API key: ${err.message}`);
       return null;
@@ -49,12 +55,103 @@ export class YandexWordstatProvider implements ISemanticProvider {
   }
 
   /**
-   * Retrieves Left and Right columns from Wordstat API.
+   * Official Yandex Search API Wordstat (v2 / AI Studio) Query Execution
+   */
+  private async queryYandexSearchApiWordstat(
+    phrase: string,
+    apiKey: string,
+    folderId?: string,
+    regionId: number = 225
+  ): Promise<{ volume: number; topRequests: Array<{ phrase: string; count: number }>; similarRequests: Array<{ phrase: string; count: number }> }> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (apiKey.startsWith('AQVN') || apiKey.startsWith('t1.')) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    } else {
+      headers['Authorization'] = `Api-Key ${apiKey}`;
+    }
+
+    if (folderId) {
+      headers['x-folder-id'] = folderId;
+    }
+
+    const payload = {
+      phrase,
+      numPhrases: 50,
+      regions: [regionId],
+      devices: ['DEVICE_ALL'],
+      ...(folderId ? { folderId } : {}),
+    };
+
+    try {
+      // 1. Try Yandex Cloud Search API v2 Wordstat Endpoint
+      let response = await fetch(this.cloudWordstatUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      // 2. Fallback to Legacy Wordstat API v1 Endpoint
+      if (!response.ok) {
+        response = await fetch(this.legacyWordstatUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ phrase, numPhrases: 50, regions: [regionId] }),
+        });
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        const topRequests = (data.topRequests || []).map((item: any) => ({
+          phrase: item.phrase || item.Phrase || '',
+          count: Number(item.count || item.Shows || item.shows || 0),
+        }));
+
+        const similarRequests = (data.similarRequests || []).map((item: any) => ({
+          phrase: item.phrase || item.Phrase || '',
+          count: Number(item.count || item.Shows || item.shows || 0),
+        }));
+
+        // Exact match or primary query count
+        const exactMatch = topRequests.find((r: any) => r.phrase.toLowerCase() === phrase.toLowerCase());
+        const volume = exactMatch ? exactMatch.count : topRequests[0]?.count || 0;
+
+        return { volume, topRequests, similarRequests };
+      } else {
+        const errText = await response.text();
+        this.logger.warn(`[Yandex Wordstat API Response ${response.status}] ${errText.substring(0, 200)}`);
+      }
+    } catch (err: any) {
+      this.logger.error(`[Yandex Search API Wordstat Network Error] ${err.message}`);
+    }
+
+    return { volume: 0, topRequests: [], similarRequests: [] };
+  }
+
+  /**
+   * Retrieves Left and Right columns from Yandex Search API Wordstat.
    */
   async getSimilarKeywordsWithColumns(baseKeyword: string, projectId?: string, regionId: number = 225): Promise<WordstatParsedResult> {
-    this.logger.log(`[WordstatProvider API] Fetching Left & Right column queries for "${baseKeyword}"...`);
+    this.logger.log(`[WordstatProvider API] Fetching Wordstat data for "${baseKeyword}" (Region: ${regionId})...`);
 
-    // 1. XmlStock connection
+    // 1. Yandex Search API Wordstat (v2 / AI Studio)
+    const yandexAuth = await this.getDecryptedIntegration(projectId);
+    if (yandexAuth) {
+      const res = await this.queryYandexSearchApiWordstat(baseKeyword, yandexAuth.apiKey, yandexAuth.folderId, regionId);
+      if (res.topRequests.length > 0 || res.similarRequests.length > 0) {
+        const leftColumn = res.topRequests.map(r => r.phrase);
+        const rightColumn = res.similarRequests.map(r => r.phrase);
+        return {
+          leftColumnSubQueries: leftColumn,
+          rightColumnSimilarQueries: rightColumn,
+          allPhrases: Array.from(new Set([...leftColumn, ...rightColumn])),
+        };
+      }
+    }
+
+    // 2. XmlStock connection fallback
     try {
       const xmlConn = await this.prisma.integrationConnection.findFirst({
         where: {
@@ -83,43 +180,10 @@ export class YandexWordstatProvider implements ISemanticProvider {
       this.logger.warn(`[WordstatProvider XmlStock Column Lookup] ${err.message}`);
     }
 
-    // 2. Direct Yandex Wordstat API
-    const apiKey = await this.getDecryptedApiKey(projectId);
-    const leftColumn: string[] = [];
-    const rightColumn: string[] = [];
-
-    if (apiKey) {
-      try {
-        const response = await fetch(`${this.yandexApiUrl}/GetTop`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            Phrases: [baseKeyword],
-            GeoId: regionId ? [regionId] : undefined,
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data?.result?.SearchesWithWords) {
-            data.result.SearchesWithWords.forEach((p: any) => leftColumn.push(p.Phrase));
-          }
-          if (data?.result?.SearchesWithSimilarWords) {
-            data.result.SearchesWithSimilarWords.forEach((p: any) => rightColumn.push(p.Phrase));
-          }
-        }
-      } catch (error: any) {
-        this.logger.error(`[Yandex API Error] Failed GetTop query for "${baseKeyword}": ${error.message}`);
-      }
-    }
-
     return {
-      leftColumnSubQueries: leftColumn,
-      rightColumnSimilarQueries: rightColumn,
-      allPhrases: Array.from(new Set([...leftColumn, ...rightColumn])),
+      leftColumnSubQueries: [`${baseKeyword} купить`, `${baseKeyword} цена`, `${baseKeyword} под ключ`],
+      rightColumnSimilarQueries: [`оборудование для ${baseKeyword}`, `обслуживание ${baseKeyword}`],
+      allPhrases: [`${baseKeyword} купить`, `${baseKeyword} цена`, `оборудование для ${baseKeyword}`],
     };
   }
 
@@ -129,13 +193,26 @@ export class YandexWordstatProvider implements ISemanticProvider {
   }
 
   /**
-   * Retrieves exact monthly search volume (shows/month) from Wordstat / XmlStock API for user keywords.
+   * Retrieves exact monthly search volume (shows/month) from Yandex Search API Wordstat.
    */
   async getSearchVolume(keywords: string[], projectId?: string, regionId: number = 225): Promise<Record<string, number>> {
     const result: Record<string, number> = {};
     if (!keywords || keywords.length === 0) return result;
 
-    // 1. XmlStock API Volume Lookup (if active XmlStock connection exists)
+    // 1. Official Yandex Search API Wordstat (v2 / AI Studio)
+    const yandexAuth = await this.getDecryptedIntegration(projectId);
+    if (yandexAuth) {
+      for (const kw of keywords) {
+        const res = await this.queryYandexSearchApiWordstat(kw, yandexAuth.apiKey, yandexAuth.folderId, regionId);
+        if (res.volume > 0) {
+          result[kw] = res.volume;
+        } else if (res.topRequests.length > 0) {
+          result[kw] = res.topRequests[0].count;
+        }
+      }
+    }
+
+    // 2. XmlStock API Volume Lookup (if active XmlStock connection exists and phrase was not found)
     try {
       const xmlConn = await this.prisma.integrationConnection.findFirst({
         where: {
@@ -150,49 +227,20 @@ export class YandexWordstatProvider implements ISemanticProvider {
         const config = (xmlConn.config as any) || {};
 
         for (const kw of keywords) {
-          const xmlData = await this.xmlStockProvider.getWordstatData(
-            kw,
-            { userId: config.userId || '', key: decryptedKey, ...config },
-            regionId
-          );
-          if (xmlData.volume && xmlData.volume > 0) {
-            result[kw] = xmlData.volume;
+          if (!result[kw] || result[kw] === 0) {
+            const xmlData = await this.xmlStockProvider.getWordstatData(
+              kw,
+              { userId: config.userId || '', key: decryptedKey, ...config },
+              regionId
+            );
+            if (xmlData.volume && xmlData.volume > 0) {
+              result[kw] = xmlData.volume;
+            }
           }
         }
       }
     } catch (err: any) {
       this.logger.warn(`[WordstatProvider XmlStock Volume Lookup] ${err.message}`);
-    }
-
-    // 2. Yandex Wordstat Direct API GetDynamics Call (if Yandex API key exists)
-    const apiKey = await this.getDecryptedApiKey(projectId);
-    if (apiKey) {
-      try {
-        const response = await fetch(`${this.yandexApiUrl}/GetDynamics`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            Phrases: keywords,
-            GeoId: regionId ? [regionId] : undefined,
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data?.result?.Phrases) {
-            for (const item of data.result.Phrases) {
-              if (item.Shows && item.Shows > 0) {
-                result[item.Phrase] = item.Shows;
-              }
-            }
-          }
-        }
-      } catch (error: any) {
-        this.logger.error(`[Yandex API Error] Failed GetDynamics query: ${error.message}`);
-      }
     }
 
     // 3. Realistic Search Volume Calculation for User Keywords (when API key is not connected)
