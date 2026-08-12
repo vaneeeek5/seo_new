@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import dns from 'node:dns';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {}
 
 const NESTJS_API = process.env.INTERNAL_API_URL || 'http://api:4000';
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delayMs = 500): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit, retries = 2, delayMs = 300): Promise<Response> {
   for (let i = 0; i < retries; i++) {
     try {
       return await fetch(url, options);
@@ -30,8 +35,8 @@ async function proxyToNestJS(request: NextRequest, path: string): Promise<NextRe
       method: request.method,
       headers,
       body,
-      signal: AbortSignal.timeout(4000),
-    }, 2, 400);
+      signal: AbortSignal.timeout(5000),
+    }, 2, 300);
 
     const responseText = await res.text();
     let responseData: unknown;
