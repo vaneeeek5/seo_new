@@ -75,7 +75,7 @@ export class SemanticProcessor extends WorkerHost {
   }
 
   /**
-   * ШАГ 2: Выделение базисов (ИИ - без частотности)
+   * ШАГ 2: Выделение базисов (ИИ - только базисы в 2-3 слова, без частотности)
    */
   private async extractBaseDirectionsAI(rawText: string): Promise<string[]> {
     this.logger.log(`[Step 2/6 AI] Extracting base 2-3 word directions/services from site text via LLM...`);
@@ -121,7 +121,7 @@ export class SemanticProcessor extends WorkerHost {
   }
 
   /**
-   * ШАГ 4: Расширение семантики (ИИ - группировка и синонимы без цифр)
+   * ШАГ 4: Расширение семантики (ИИ - синонимы и боли клиентов, только слова без цифр)
    */
   private async expandSemanticPhrasesAI(wordstatPhrases: string[]): Promise<string[]> {
     this.logger.log(`[Step 4/6 AI] Generating 20-30 synonyms and customer pain-point variations...`);
@@ -167,7 +167,7 @@ export class SemanticProcessor extends WorkerHost {
    */
   private async clusterAndClassifyIntentAI(cleanPhrases: string[]): Promise<Array<{ phrase: string; clusterName: string; intent: KeywordIntent }>> {
     this.logger.log(`[Step 6/6 AI] Clustering and classifying intent for ${cleanPhrases.length} verified Yandex phrases...`);
-    const promptText = `Разбей этот список поисковых запросов на смысловые кластеры и определи интент для каждого фраз (COMMERCIAL, INFORMATIONAL, NAVIGATIONAL).\nВерни JSON массив объектов: [{"phrase": "...", "clusterName": "...", "intent": "COMMERCIAL"}]\n\nФразы:\n${JSON.stringify(cleanPhrases.slice(0, 60))}`;
+    const promptText = `Разбей этот список поисковых запросов на смысловые кластеры и определи интент для каждой фраз (COMMERCIAL, INFORMATIONAL, NAVIGATIONAL).\nВерни JSON массив объектов: [{"phrase": "...", "clusterName": "...", "intent": "COMMERCIAL"}]\n\nФразы:\n${JSON.stringify(cleanPhrases.slice(0, 60))}`;
 
     const geminiKey = process.env.GEMINI_API_KEY;
     if (geminiKey) {
@@ -211,7 +211,7 @@ export class SemanticProcessor extends WorkerHost {
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { taskId, projectId, seedKeywords, regionId } = job.data;
-    this.logger.log(`[SemanticWorker] Executing 6-Step Strict Code-Driven Pipeline for task ${taskId}...`);
+    this.logger.log(`[SemanticWorker] Executing Strict 6-Step Code-Driven Wordstat Pipeline for task ${taskId}...`);
 
     try {
       const primarySeed = (Array.isArray(seedKeywords) && seedKeywords.length > 0)
@@ -270,25 +270,41 @@ export class SemanticProcessor extends WorkerHost {
       const aiExpandedCandidates = await this.expandSemanticPhrasesAI(step3Candidates);
 
       // =========================================================================
-      // ШАГ 5: Второй прогон через Yandex Wordstat API (ТОЛЬКО КОД) + ЖЕСТКОЕ УДАЛЕНИЕ 0 ПОКАЗОВ
+      // ШАГ 5: ВТОРОЙ ПРОГОН ИИ-ФРАЗ ЧЕРЕЗ ВОРДСТАТ (КОД - Сбор Левой и Правой колонок ДЛЯ КАЖДОЙ ИИ-ФРАЗЫ)
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 75, `📈 Шаг 5/6 [КОД - Wordstat API #2]: Проверка частотности новых AI-фраз и ЖЕСТКОЕ отсечение 0 показов...`);
-      const cleanAiCandidates = aiExpandedCandidates
-        .map(p => this.sanitizePhrase(p))
-        .filter((p): p is string => p !== null && !step3PhrasesSet.has(p));
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 75, `📈 Шаг 5/6 [КОД - Wordstat API #2]: Запрос Вордстата по ВСЕМ ИИ-фразам, сбор их Левых/Правых колонок и отсечение 0 показов...`);
+      
+      const step5CandidateSet = new Set<string>();
 
-      const step5Volumes = await this.wordstatProvider.getSearchVolume(cleanAiCandidates, projectId, regionId);
+      for (const aiPhrase of aiExpandedCandidates) {
+        const cleanAi = this.sanitizePhrase(aiPhrase);
+        if (cleanAi) step5CandidateSet.add(cleanAi);
+
+        // Прогоняем КАЖДУЮ ИИ-фразу через Вордстат, чтобы извлечь реальные похожие фразы и эко-запросы
+        const dualResult = await this.wordstatProvider.getSimilarKeywordsWithColumns(aiPhrase, projectId, regionId);
+        dualResult.leftColumnSubQueries.forEach(p => {
+          const clean = this.sanitizePhrase(p);
+          if (clean) step5CandidateSet.add(clean);
+        });
+        dualResult.rightColumnSimilarQueries.forEach(p => {
+          const clean = this.sanitizePhrase(p);
+          if (clean) step5CandidateSet.add(clean);
+        });
+      }
+
+      const step5AllCandidates = Array.from(step5CandidateSet);
+      const step5Volumes = await this.wordstatProvider.getSearchVolume(step5AllCandidates, projectId, regionId);
       Object.assign(volumeMap, step5Volumes);
 
-      // Объединяем результаты Шага 3 и Шага 5 и ЖЕСТКО УДАЛЯЕМ 0 ПОКАЗОВ
-      const allVerifiedPhrases = Array.from(new Set([...step3Candidates, ...cleanAiCandidates]))
+      // Объединяем ВСЕ фразы и ЖЕСТКО УДАЛЯЕМ те, у которых частотность <= 0
+      const allVerifiedPhrases = Array.from(new Set([...step3Candidates, ...step5AllCandidates]))
         .filter(phrase => {
           const vol = volumeMap[phrase] || 0;
-          return vol > 0; // STERN GATEKEEPER: ONLY KEEP REAL WORDSTAT VOLUMES > 0
+          return vol > 0; // STRICT GATEKEEPER: DISCARD PHRASES WITH 0 SHOWS
         });
 
       // =========================================================================
-      // ШАГ 6: Кластеризация и Интент (ИИ + КОД) & Запись в БД с РЕАЛЬНОЙ частотностью
+      // ШАГ 6: Кластеризация и Интент (ИИ + КОД) & Запись в БД с РЕАЛЬНОЙ частотностью Wordstat API
       // =========================================================================
       this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 90, `💾 Шаг 6/6 [ИИ + КОД]: Кластеризация, определение интентов и запись в БД с частотностью Yandex API...`);
       
@@ -318,7 +334,7 @@ export class SemanticProcessor extends WorkerHost {
           data: {
             projectId,
             term: item.phrase,
-            searchVol: realVol, // DIRECTLY FROM YANDEX WORDSTAT API
+            searchVol: realVol, // DIRECTLY FROM YANDEX WORDSTAT / XMLSTOCK API
             difficulty: Math.min(100, Math.floor(realVol / 150)),
             intent: item.intent,
             source: 'Yandex Wordstat API', // STRICT SOURCE TAGGING
@@ -334,7 +350,7 @@ export class SemanticProcessor extends WorkerHost {
         projectId,
         TaskStatus.COMPLETED,
         100,
-        `🎉 6-Шаговый Пайплайн Завершен! Сохранено ${savedCount} целевых ключей с подтвержденной частотностью Yandex Wordstat API (Источник: Yandex Wordstat API).`
+        `🎉 6-Шаговый Пайплайн Завершен! Все ИИ-фразы и их похожие колонки прогнаны через Вордстат. Сохранено ${savedCount} РЕАЛЬНЫХ ключей (Источник: Yandex Wordstat API).`
       );
 
       return {
