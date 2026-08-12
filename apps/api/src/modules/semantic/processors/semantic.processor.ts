@@ -4,12 +4,10 @@ import { Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DomainEventTypes, TaskStatusChangedEvent, TaskStatus, TaskType } from '@seo-saas/shared';
 import { YandexWordstatProvider } from '../providers/yandex-wordstat.provider';
-import { SiteScraperService } from '../services/site-scraper.service';
-import { SearchSuggestProvider } from '../providers/search-suggest.provider';
 import { IntentNegativeFilterService } from '../services/intent-negative-filter.service';
 import { XmlStockProvider, XmlStockConfig } from '../providers/xmlstock.provider';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { ContentStatus, IntegrationProvider } from '@prisma/client';
+import { ContentStatus, IntegrationProvider, KeywordIntent } from '@prisma/client';
 
 @Processor('semantic-queue', {
   limiter: {
@@ -23,8 +21,6 @@ export class SemanticProcessor extends WorkerHost {
   constructor(
     private readonly eventEmitter: EventEmitter2,
     private readonly wordstatProvider: YandexWordstatProvider,
-    private readonly siteScraper: SiteScraperService,
-    private readonly suggestProvider: SearchSuggestProvider,
     private readonly intentFilterService: IntentNegativeFilterService,
     private readonly xmlStockProvider: XmlStockProvider,
     private readonly prisma: PrismaService,
@@ -33,23 +29,189 @@ export class SemanticProcessor extends WorkerHost {
   }
 
   /**
-   * Helper to clean & check string word length and punctuation.
+   * Helper: Validates search phrase length and removes invalid punctuation.
    */
-  private isValidSearchPhrase(phrase: string): boolean {
-    if (!phrase) return false;
-    // Discard phrases containing punctuation or long sentence characters
-    if (/[.,!?;:"'()\[\]{}–—\-\\\/]/g.test(phrase)) return false;
+  private sanitizePhrase(phrase: string): string | null {
+    if (!phrase) return null;
+    const clean = phrase.toLowerCase().replace(/[.,!?;:"'()\[\]{}–—\-\\\/]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const words = clean.split(' ').filter(Boolean);
+    if (words.length >= 1 && words.length <= 7) {
+      return words.join(' ');
+    }
+    return null;
+  }
 
-    const words = phrase.trim().split(/\s+/).filter(Boolean);
-    // Discard phrases longer than 7 words or shorter than 1 word
-    if (words.length < 1 || words.length > 7) return false;
+  /**
+   * ШАГ 1: Физический парсинг сайта (ТОЛЬКО КОД - без ИИ)
+   */
+  private async scrapeRawWebsiteText(url: string): Promise<string> {
+    const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
+    this.logger.log(`[Step 1/6 CODE] Physical HTML scraping at ${cleanUrl}...`);
 
-    return true;
+    try {
+      const response = await fetch(cleanUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (response.ok) {
+        const html = await response.text();
+        return html
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    } catch (err: any) {
+      this.logger.warn(`[Step 1/6 CODE] Fetch warning for ${cleanUrl}: ${err.message}`);
+    }
+
+    return url;
+  }
+
+  /**
+   * ШАГ 2: Выделение базисов (ИИ - без частотности)
+   */
+  private async extractBaseDirectionsAI(rawText: string): Promise<string[]> {
+    this.logger.log(`[Step 2/6 AI] Extracting base 2-3 word directions/services from site text via LLM...`);
+    const promptText = `Выдели из этого текста 5-10 базовых направлений/услуг в 2-3 слова. Верни только плоский массив строк в JSON формате без выдуманных цифр частотности.\n\nТекст страницы:\n${rawText.slice(0, 3000)}`;
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data: any = await response.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const sanitized = parsed.map(p => this.sanitizePhrase(String(p))).filter((p): p is string => p !== null);
+            if (sanitized.length > 0) {
+              return Array.from(new Set(sanitized)).slice(0, 10);
+            }
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`[Step 2/6 AI Warning] ${err.message}`);
+      }
+    }
+
+    // Heuristic Fallback
+    const words = rawText.toLowerCase().replace(/[^a-z0-9а-яё\s]/gi, ' ').split(/\s+/).filter(w => w.length > 4);
+    const bases: string[] = [];
+    for (let i = 0; i < words.length - 1 && bases.length < 8; i += 3) {
+      bases.push(`${words[i]} ${words[i + 1]}`);
+    }
+    return Array.from(new Set(bases)).slice(0, 8);
+  }
+
+  /**
+   * ШАГ 4: Расширение семантики (ИИ - группировка и синонимы без цифр)
+   */
+  private async expandSemanticPhrasesAI(wordstatPhrases: string[]): Promise<string[]> {
+    this.logger.log(`[Step 4/6 AI] Generating 20-30 synonyms and customer pain-point variations...`);
+    const sample = wordstatPhrases.slice(0, 25).join(', ');
+    const promptText = `Вот список поисковых запросов из Яндекса. Сгруппируй их по смыслу и придумай еще 20-30 логичных синонимов, сленговых выражений или болей клиентов, которые люди могут искать по этой теме. Верни массив строк в JSON формате.\n\nЗапросы из Яндекса:\n${sample}`;
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data: any = await response.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const sanitized = parsed.map(p => this.sanitizePhrase(String(p))).filter((p): p is string => p !== null);
+            if (sanitized.length > 0) {
+              return Array.from(new Set(sanitized));
+            }
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`[Step 4/6 AI Warning] ${err.message}`);
+      }
+    }
+
+    // Heuristic Fallback
+    return wordstatPhrases.flatMap(p => [`купить ${p}`, `цена ${p}`, `${p} под ключ`]);
+  }
+
+  /**
+   * ШАГ 6: Кластеризация и Интент (ИИ + КОД)
+   */
+  private async clusterAndClassifyIntentAI(cleanPhrases: string[]): Promise<Array<{ phrase: string; clusterName: string; intent: KeywordIntent }>> {
+    this.logger.log(`[Step 6/6 AI] Clustering and classifying intent for ${cleanPhrases.length} verified Yandex phrases...`);
+    const promptText = `Разбей этот список поисковых запросов на смысловые кластеры и определи интент для каждого фраз (COMMERCIAL, INFORMATIONAL, NAVIGATIONAL).\nВерни JSON массив объектов: [{"phrase": "...", "clusterName": "...", "intent": "COMMERCIAL"}]\n\nФразы:\n${JSON.stringify(cleanPhrases.slice(0, 60))}`;
+
+    const geminiKey = process.env.GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data: any = await response.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map(item => ({
+              phrase: item.phrase || cleanPhrases[0],
+              clusterName: item.clusterName || 'Основное направление',
+              intent: (item.intent === 'INFORMATIONAL' || item.intent === 'NAVIGATIONAL') ? item.intent : 'COMMERCIAL',
+            }));
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`[Step 6/6 AI Clustering Warning] ${err.message}`);
+      }
+    }
+
+    // Heuristic Classification Fallback
+    const classified = this.intentFilterService.batchClassify(cleanPhrases);
+    return classified.map(c => ({
+      phrase: c.phrase,
+      clusterName: 'Кластер: Семантическое ядро',
+      intent: c.intent === 'INFORMATIONAL' ? KeywordIntent.INFORMATIONAL : KeywordIntent.COMMERCIAL,
+    }));
   }
 
   async process(job: Job<any, any, string>): Promise<any> {
     const { taskId, projectId, seedKeywords, regionId } = job.data;
-    this.logger.log(`[SemanticWorker] Executing Strict Gatekeeper Super-Pipeline for task ${taskId} (Region: ${regionId || 225})...`);
+    this.logger.log(`[SemanticWorker] Executing 6-Step Strict Code-Driven Pipeline for task ${taskId}...`);
 
     try {
       const primarySeed = (Array.isArray(seedKeywords) && seedKeywords.length > 0)
@@ -58,168 +220,126 @@ export class SemanticProcessor extends WorkerHost {
 
       const isUrl = primarySeed.startsWith('http://') || primarySeed.startsWith('https://') || primarySeed.includes('.com') || primarySeed.includes('.ru');
 
-      // Load XmlStock / Wordstat dynamic configuration from database
-      const xmlConn = await this.prisma.integrationConnection.findFirst({
-        where: {
-          projectId,
-          provider: IntegrationProvider.XMLSTOCK,
-          isActive: true,
-        },
-      });
-
-      const xmlConfig: XmlStockConfig = (xmlConn?.config as any) || {
-        wordstatEnabled: true,
-        yandexXmlEnabled: true,
-        yandexLiveEnabled: true,
-        googleXmlEnabled: true,
-      };
-
       // =========================================================================
-      // ШАГ 1 (15%): Извлечение БАЗОВЫХ МАСОК (Strict 2-4 words seed masks)
+      // ШАГ 1: Физический парсинг сайта (ТОЛЬКО КОД - без ИИ)
       // =========================================================================
-      let baseSeeds: string[] = [];
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 15, `🌐 Шаг 1/6 [КОД]: Скачивание HTML и вырезание тегов с сайта "${primarySeed}"...`);
+      let rawSiteText = '';
       if (isUrl) {
-        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 15, `🌐 Шаг 1/7 [Agent-Core]: ИИ-извлечение базовых масок ключей (2-4 слова) с сайта "${primarySeed}"...`);
-        const scraped = await this.siteScraper.scrapeSiteKeywords(primarySeed, projectId);
-        baseSeeds = scraped.extractedKeywords;
+        rawSiteText = await this.scrapeRawWebsiteText(primarySeed);
       } else {
-        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 15, `🔍 Шаг 1/7 [Agent-Core]: Очистка первичных базовых масок фраз...`);
-        baseSeeds = Array.isArray(seedKeywords) ? seedKeywords : [seedKeywords];
-      }
-
-      // Ensure seeds are clean 2-4 word masks
-      baseSeeds = baseSeeds.map(s => s.toLowerCase().replace(/[.,!?;:"'()\[\]{}–—\-\\\/]+/g, ' ').trim()).filter(s => s.split(' ').length >= 1 && s.split(' ').length <= 5);
-
-      const phraseSourceMap = new Map<string, string>();
-      const candidatePhrasesSet = new Set<string>();
-
-      // =========================================================================
-      // ШАГ 2 (30%): Принудительный сбор РЕАЛЬНЫХ запросов из Яндекса (Wordstat / XmlStock)
-      // =========================================================================
-      if (xmlConfig.wordstatEnabled !== false) {
-        this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 30, `📊 Шаг 2/7 [Wordstat ON]: Запрос Левой и Правой колонок Вордстата через API...`);
-        for (const seed of baseSeeds.slice(0, 6)) {
-          const dualResult = await this.wordstatProvider.getSimilarKeywordsWithColumns(seed, projectId, regionId);
-          dualResult.leftColumnSubQueries.forEach(p => {
-            candidatePhrasesSet.add(p);
-            phraseSourceMap.set(p, 'Wordstat');
-          });
-          dualResult.rightColumnSimilarQueries.forEach(p => {
-            candidatePhrasesSet.add(p);
-            phraseSourceMap.set(p, 'Wordstat');
-          });
-        }
-      }
-
-      // Google XML Suggestions
-      if (xmlConfig.googleXmlEnabled === true) {
-        for (const seed of baseSeeds.slice(0, 4)) {
-          const gData = await this.xmlStockProvider.getGoogleXmlData(seed, xmlConfig);
-          gData.suggestions.forEach(s => {
-            candidatePhrasesSet.add(s);
-            phraseSourceMap.set(s, 'XmlStock');
-          });
-        }
-      }
-
-      // Yandex Live SERP Parsing
-      if (xmlConfig.yandexLiveEnabled === true) {
-        for (const seed of baseSeeds.slice(0, 4)) {
-          const yLiveData = await this.xmlStockProvider.getYandexLiveData(seed, xmlConfig);
-          yLiveData.suggestions.forEach(s => {
-            candidatePhrasesSet.add(s);
-            phraseSourceMap.set(s, 'XmlStock');
-          });
-        }
+        rawSiteText = Array.isArray(seedKeywords) ? seedKeywords.join(' ') : primarySeed;
       }
 
       // =========================================================================
-      // ШАГ 3 (45%): Поисковые подсказки (SearchSuggestProvider Yandex/Google)
+      // ШАГ 2: Выделение базисов (ИИ - только базисы в 2-3 слова, без частотности)
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 45, `💡 Шаг 3/7 [Agent-Core]: Сбор поисковых подсказок Яндекса и Google...`);
-      const minedSuggests = await this.suggestProvider.collectLongTailSuggests(baseSeeds);
-      minedSuggests.forEach(s => {
-        candidatePhrasesSet.add(s);
-        phraseSourceMap.set(s, 'XmlStock');
-      });
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 30, `🤖 Шаг 2/6 [ИИ]: Выделение 5-10 базовых направлений/услуг в 2-3 слова...`);
+      let baseBases = await this.extractBaseDirectionsAI(rawSiteText);
+      if (baseBases.length === 0) {
+        baseBases = [isUrl ? primarySeed.replace(/https?:\/\//, '').split('.')[0] : primarySeed];
+      }
 
       // =========================================================================
-      // ШАГ 4 (60%): Очистка от минус-слов и фильтрация длины/знаков препинания
+      // ШАГ 3: Первый прогон через Yandex Wordstat API (ТОЛЬКО КОД)
       // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `🧹 Шаг 4/7 [Strict Gatekeeper]: Отсечение пустых фраз, знаков препинания и фраз > 7 слов...`);
-      const rawCandidates = Array.from(candidatePhrasesSet).filter(p => this.isValidSearchPhrase(p));
-      const cleanCandidates = this.intentFilterService.filterNegativeWords(rawCandidates);
-      const classifiedCandidates = this.intentFilterService.batchClassify(cleanCandidates);
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 45, `📊 Шаг 3/6 [КОД - Wordstat API #1]: Сбор Левой и Правой колонок Вордстата по базисам...`);
+      const step3PhrasesSet = new Set<string>();
+      const volumeMap: Record<string, number> = {};
 
-      // =========================================================================
-      // ШАГ 5 (75%): Принудительная проверка РЕАЛЬНОЙ частотности в Wordstat API
-      // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 75, `📈 Шаг 5/7 [Wordstat API Verification]: Получение РЕАЛЬНЫХ показов/месяц от Яндекса...`);
-      
-      const candidateTerms = classifiedCandidates.map(c => c.phrase);
-      const volumeMap = await this.wordstatProvider.getSearchVolume(candidateTerms, projectId, regionId);
-
-      // =========================================================================
-      // ШАГ 6 (90%): ФИЛЬТРАЦИЯ 0-ПОКАЗОВ и Сохранение в БД
-      // =========================================================================
-      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 90, `💾 Шаг 6/7 [Strict Gatekeeper]: Сохранение ТОЛЬКО подтвержденных Вордстатом ключей...`);
-
-      const clusterName = isUrl ? `Семантическое ядро: ${primarySeed}` : `Кластер: ${primarySeed}`;
-      let cluster = await this.prisma.cluster.findFirst({
-        where: { projectId, name: clusterName },
-      });
-
-      if (!cluster) {
-        cluster = await this.prisma.cluster.create({
-          data: {
-            projectId,
-            name: clusterName,
-            status: ContentStatus.DRAFT,
-          },
+      for (const base of baseBases) {
+        const dualResult = await this.wordstatProvider.getSimilarKeywordsWithColumns(base, projectId, regionId);
+        dualResult.leftColumnSubQueries.forEach(p => {
+          const clean = this.sanitizePhrase(p);
+          if (clean) step3PhrasesSet.add(clean);
+        });
+        dualResult.rightColumnSimilarQueries.forEach(p => {
+          const clean = this.sanitizePhrase(p);
+          if (clean) step3PhrasesSet.add(clean);
         });
       }
 
+      const step3Candidates = Array.from(step3PhrasesSet);
+      const step3Volumes = await this.wordstatProvider.getSearchVolume(step3Candidates, projectId, regionId);
+      Object.assign(volumeMap, step3Volumes);
+
+      // =========================================================================
+      // ШАГ 4: Расширение семантики (ИИ - синонимы и боли клиентов, без цифр)
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 60, `💡 Шаг 4/6 [ИИ]: Группировка и генерация 20-30 синонимов, сленга и болей клиентов...`);
+      const aiExpandedCandidates = await this.expandSemanticPhrasesAI(step3Candidates);
+
+      // =========================================================================
+      // ШАГ 5: Второй прогон через Yandex Wordstat API (ТОЛЬКО КОД) + ЖЕСТКОЕ УДАЛЕНИЕ 0 ПОКАЗОВ
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 75, `📈 Шаг 5/6 [КОД - Wordstat API #2]: Проверка частотности новых AI-фраз и ЖЕСТКОЕ отсечение 0 показов...`);
+      const cleanAiCandidates = aiExpandedCandidates
+        .map(p => this.sanitizePhrase(p))
+        .filter((p): p is string => p !== null && !step3PhrasesSet.has(p));
+
+      const step5Volumes = await this.wordstatProvider.getSearchVolume(cleanAiCandidates, projectId, regionId);
+      Object.assign(volumeMap, step5Volumes);
+
+      // Объединяем результаты Шага 3 и Шага 5 и ЖЕСТКО УДАЛЯЕМ 0 ПОКАЗОВ
+      const allVerifiedPhrases = Array.from(new Set([...step3Candidates, ...cleanAiCandidates]))
+        .filter(phrase => {
+          const vol = volumeMap[phrase] || 0;
+          return vol > 0; // STERN GATEKEEPER: ONLY KEEP REAL WORDSTAT VOLUMES > 0
+        });
+
+      // =========================================================================
+      // ШАГ 6: Кластеризация и Интент (ИИ + КОД) & Запись в БД с РЕАЛЬНОЙ частотностью
+      // =========================================================================
+      this.emitTaskStatus(taskId, projectId, TaskStatus.PROCESSING, 90, `💾 Шаг 6/6 [ИИ + КОД]: Кластеризация, определение интентов и запись в БД с частотностью Yandex API...`);
+      
+      const clusteredItems = await this.clusterAndClassifyIntentAI(allVerifiedPhrases);
+
       let savedCount = 0;
-      for (const item of classifiedCandidates) {
-        const realVolume = volumeMap[item.phrase] || 0;
+      for (const item of clusteredItems) {
+        const realVol = volumeMap[item.phrase] || 0;
+        if (realVol <= 0) continue; // Safety check
 
-        // CRITICAL FILTER: Discard any phrase where search volume is 0 or null
-        if (realVolume <= 0) {
-          this.logger.debug(`[Strict Gatekeeper] Discarded hallucination/unverified phrase: "${item.phrase}" (Volume: ${realVolume})`);
-          continue;
+        // Find or create cluster
+        let cluster = await this.prisma.cluster.findFirst({
+          where: { projectId, name: item.clusterName },
+        });
+
+        if (!cluster) {
+          cluster = await this.prisma.cluster.create({
+            data: {
+              projectId,
+              name: item.clusterName,
+              status: ContentStatus.DRAFT,
+            },
+          });
         }
-
-        // Must be sourced strictly from Wordstat or XmlStock
-        const realSource = phraseSourceMap.get(item.phrase) || 'Wordstat';
 
         await this.prisma.keyword.create({
           data: {
             projectId,
             term: item.phrase,
-            searchVol: realVolume,
-            difficulty: Math.min(100, Math.floor(realVolume / 150)),
+            searchVol: realVol, // DIRECTLY FROM YANDEX WORDSTAT API
+            difficulty: Math.min(100, Math.floor(realVol / 150)),
             intent: item.intent,
-            source: realSource, // Saved as "Wordstat" or "XmlStock"
+            source: 'Yandex Wordstat API', // STRICT SOURCE TAGGING
             clusterId: cluster.id,
           },
         });
         savedCount++;
       }
 
-      // Final Completion Event
+      // Completion Notification
       this.emitTaskStatus(
         taskId,
         projectId,
         TaskStatus.COMPLETED,
         100,
-        `🎉 Strict Gatekeeper Завершен! Подтверждено и сохранено ${savedCount} РЕАЛЬНЫХ ключей с частотностью Wordstat/XmlStock (Все фейковые AI-фразы отброшены).`
+        `🎉 6-Шаговый Пайплайн Завершен! Сохранено ${savedCount} целевых ключей с подтвержденной частотностью Yandex Wordstat API (Источник: Yandex Wordstat API).`
       );
 
       return {
-        clusterId: cluster.id,
-        clusterName: cluster.name,
         keywordsSaved: savedCount,
-        candidatesEvaluated: classifiedCandidates.length,
+        candidatesEvaluated: allVerifiedPhrases.length,
       };
     } catch (error: any) {
       this.logger.error(`[SemanticWorker Error] Task ${taskId} failed: ${error.message}`);
@@ -228,7 +348,7 @@ export class SemanticProcessor extends WorkerHost {
         projectId,
         TaskStatus.FAILED,
         0,
-        `Semantic Collection Failed: ${error.message}`
+        `Code-Driven Semantic Pipeline Failed: ${error.message}`
       );
       throw error;
     }
