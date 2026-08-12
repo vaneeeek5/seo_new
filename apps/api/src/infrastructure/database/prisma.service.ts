@@ -5,12 +5,18 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
+  constructor() {
+    super({
+      log: ['error', 'warn'],
+    });
+  }
+
   async onModuleInit() {
     try {
       await this.$connect();
       this.logger.log('Prisma Client connected to PostgreSQL database successfully.');
     } catch (err: any) {
-      this.logger.warn(`Prisma Client connection deferred (no active local DB server): ${err.message}`);
+      this.logger.warn(`Prisma Client connection warning: ${err.message}`);
     }
   }
 
