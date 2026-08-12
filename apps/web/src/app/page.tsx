@@ -277,7 +277,21 @@ export default function DashboardPage() {
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [importingFile, setImportingFile] = useState<boolean>(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [connectionsList, setConnectionsList] = useState<Array<{ id: string; provider: string; name: string; maskedKey: string; encryption: string; isActive: boolean; date: string; config?: any }>>([]);
+  const [connectionsList, setConnectionsList] = useState<Array<{ id: string; provider: string; name: string; maskedKey: string; encryption: string; isActive: boolean; date: string; config?: any }>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('seo_saas_integrations_list');
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('seo_saas_integrations_list', JSON.stringify(connectionsList));
+    }
+  }, [connectionsList]);
 
   // Fetch active integrations from Prisma DB when project changes or on mount
   useEffect(() => {
@@ -287,7 +301,7 @@ export default function DashboardPage() {
         const res = await fetch(`${baseUrl}/integrations?projectId=${selectedProjectId}`);
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data)) {
+          if (Array.isArray(data) && data.length > 0) {
             setConnectionsList(data);
           }
         }

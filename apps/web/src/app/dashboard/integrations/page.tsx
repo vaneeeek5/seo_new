@@ -34,7 +34,21 @@ export default function IntegrationsDashboardPage() {
       isActive: boolean;
       date: string;
     }>
-  >([]);
+  >(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('seo_saas_integrations_list');
+      if (saved) {
+        try { return JSON.parse(saved); } catch (e) {}
+      }
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('seo_saas_integrations_list', JSON.stringify(connectionsList));
+    }
+  }, [connectionsList]);
 
   const addLog = (msg: string) => {
     setLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
@@ -50,7 +64,7 @@ export default function IntegrationsDashboardPage() {
       const res = await fetch(`${baseUrl}/integrations`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           setConnectionsList(data);
         }
       }
