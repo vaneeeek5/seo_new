@@ -34,48 +34,7 @@ export default function IntegrationsDashboardPage() {
       isActive: boolean;
       date: string;
     }>
-  >([
-    {
-      id: 'conn_demo_yandex',
-      provider: 'YANDEX_WORDSTAT',
-      name: 'Yandex Search & Wordstat API Key',
-      maskedKey: 'y0_a-****-****-77c1',
-      encryption: 'AES-256-GCM',
-      status: 'CONNECTED',
-      isActive: true,
-      date: new Date().toLocaleDateString(),
-    },
-    {
-      id: 'conn_demo_openai',
-      provider: 'OPENAI',
-      name: 'OpenAI ChatGPT API Key',
-      maskedKey: 'sk-p-****-****-a9F1',
-      encryption: 'AES-256-GCM',
-      status: 'CONNECTED',
-      isActive: true,
-      date: new Date().toLocaleDateString(),
-    },
-    {
-      id: 'conn_demo_webhook',
-      provider: 'WEBHOOK',
-      name: 'Внешний Вебхук Публикации (Custom CMS)',
-      maskedKey: 'https://mysite.com/api/webhook-****',
-      encryption: 'AES-256-GCM',
-      status: 'CONNECTED',
-      isActive: true,
-      date: new Date().toLocaleDateString(),
-    },
-    {
-      id: 'conn_demo_tg',
-      provider: 'TELEGRAM',
-      name: 'Telegram Bot Уведомления',
-      maskedKey: 'bot77123-****-****-a19F',
-      encryption: 'AES-256-GCM',
-      status: 'CONNECTED',
-      isActive: true,
-      date: new Date().toLocaleDateString(),
-    },
-  ]);
+  >([]);
 
   const addLog = (msg: string) => {
     setLog((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
@@ -91,7 +50,7 @@ export default function IntegrationsDashboardPage() {
       const res = await fetch(`${baseUrl}/integrations`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setConnectionsList(data);
         }
       }

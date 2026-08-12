@@ -236,11 +236,26 @@ export default function DashboardPage() {
   const [dragActive, setDragActive] = useState<boolean>(false);
   const [importingFile, setImportingFile] = useState<boolean>(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [connectionsList, setConnectionsList] = useState<Array<{ id: string; provider: string; name: string; maskedKey: string; encryption: string; isActive: boolean; date: string; config?: any }>>([
-    { id: 'conn_demo_xmlstock', provider: 'XMLSTOCK', name: 'XmlStock Enterprise Gateway', maskedKey: 'xml_pass_****-99ab', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString(), config: { wordstatEnabled: true, yandexXmlEnabled: true, yandexLiveEnabled: true, googleXmlEnabled: true } },
-    { id: 'conn_demo_gemini', provider: 'GEMINI', name: 'Google Gemini 1.5 Flash API Key', maskedKey: 'AIza-****-****-9xK2', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString() },
-    { id: 'conn_demo_wp', provider: 'WORDPRESS_CMS', name: 'Основной сайт WordPress API', maskedKey: 'wp_a-****-****-00ff', encryption: 'AES-256-GCM', isActive: true, date: new Date().toLocaleDateString() },
-  ]);
+  const [connectionsList, setConnectionsList] = useState<Array<{ id: string; provider: string; name: string; maskedKey: string; encryption: string; isActive: boolean; date: string; config?: any }>>([]);
+
+  // Fetch active integrations from Prisma DB when project changes or on mount
+  useEffect(() => {
+    const fetchIntegrations = async () => {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/integrations?projectId=${selectedProjectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setConnectionsList(data);
+          }
+        }
+      } catch (err) {
+        // Quiet
+      }
+    };
+    fetchIntegrations();
+  }, [selectedProjectId]);
 
   // Semantics State (Step 2: Region, Volumes, Priority, Exclusion, Domain Filter, Niche Topics)
   const [seedInput, setSeedInput] = useState('');

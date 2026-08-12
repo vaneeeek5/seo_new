@@ -26,11 +26,15 @@ export class SaveConnectionHandler implements ICommandHandler<SaveConnectionComm
     const encryptedData = this.encryptionService.encrypt(dto.apiKey || '');
 
     // Map provider string safely to Prisma Enum
-    let mappedProvider: IntegrationProvider = IntegrationProvider.OPENAI;
-    const provUpper = dto.provider?.toUpperCase();
+    let mappedProvider: IntegrationProvider = IntegrationProvider.YANDEX_WORDSTAT;
+    const provUpper = dto.provider?.toUpperCase() || '';
 
-    if (provUpper === 'YANDEX_WORDSTAT' || provUpper === 'WORDSTAT') {
+    if (provUpper === 'XMLSTOCK') {
+      mappedProvider = IntegrationProvider.XMLSTOCK;
+    } else if (provUpper === 'YANDEX_WORDSTAT' || provUpper === 'WORDSTAT') {
       mappedProvider = IntegrationProvider.YANDEX_WORDSTAT;
+    } else if (provUpper === 'OPENAI') {
+      mappedProvider = IntegrationProvider.OPENAI;
     } else if (provUpper === 'METRIKA') {
       mappedProvider = IntegrationProvider.METRIKA;
     } else if (provUpper === 'WEBHOOK' || provUpper === 'CUSTOM_WEBHOOK') {
