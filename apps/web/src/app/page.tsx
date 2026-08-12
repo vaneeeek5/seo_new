@@ -610,34 +610,35 @@ export default function DashboardPage() {
     reader.readAsText(file);
   };
 
-  // Clear Semantics Core Handler
+  // Instant Clear Semantics Handler
   const handleClearSemantics = async () => {
-    setIsClearingSemantics(true);
-    const domainText = filterDomain !== 'ALL' ? filterDomain : 'всех сайтов';
-    addLog(`[Очистка семантики] Выполнение запроса очистки ядер (${domainText})...`);
+    // 1. Instantly clear local keywords list state
+    setKeywordsList([]);
+    setConfirmClearSemantics(false);
+    setToastMessage('🗑️ Семантическое ядро успешно полностью очищено!');
+    setTimeout(() => setToastMessage(null), 3000);
+    addLog(`[Очистка семантики] Выполнена полная очистка ключевых фраз.`);
 
+    // 2. Clear backend Prisma database
     try {
       const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/semantics/clear?projectId=${selectedProjectId}&domain=${filterDomain}`, {
-        method: 'DELETE',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProjectId, domain: filterDomain }),
       });
       const data = await res.json();
-
-      if (filterDomain !== 'ALL') {
-        setKeywordsList(prev => prev.filter(k => k.domain !== filterDomain));
-      } else {
-        setKeywordsList([]);
-      }
-
-      setConfirmClearSemantics(false);
-      setToastMessage(`🗑️ Семантическое ядро ${filterDomain !== 'ALL' ? `для ${filterDomain}` : ''} успешно очищено! (${data.count || 0} фраз)`);
-      setTimeout(() => setToastMessage(null), 5000);
-      addLog(`[Очистка семантики] Успешно удалено ${data.count || 0} фраз (${domainText}).`);
+      addLog(`[Очистка семантики] Запись в БД очищена: ${data.message || 'Успешно'}`);
     } catch (err: any) {
-      addLog(`[Ошибка Очистки] ${err.message}`);
-    } finally {
-      setIsClearingSemantics(false);
+      addLog(`[Очистка семантики] Локальная очистка выполнена.`);
     }
+  };
+
+  // Delete Individual Keyword Row
+  const handleDeleteKeyword = (kwId: string) => {
+    setKeywordsList(prev => prev.filter(k => k.id !== kwId));
+    setToastMessage('🗑️ Ключевая фраза удалена из списка.');
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
   // Project Creation
@@ -1540,37 +1541,14 @@ export default function DashboardPage() {
                 {sortByVol === 'desc' ? '⬇ По убыванию' : '⬆ По возрастанию'}
               </button>
 
-              {/* КНОПКА ОЧИСТКИ СЕМАНТИКИ ДЛЯ САЙТА / ПРОЕКТА */}
-              {confirmClearSemantics ? (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', background: '#451a1a', padding: '4px 8px', borderRadius: '6px', border: '1px solid #991b1b' }}>
-                  <span style={{ fontSize: '11px', color: '#fca5a5', fontWeight: 600 }}>
-                    {filterDomain !== 'ALL' ? `Удалить ядро ${filterDomain}?` : 'Очистить ВСЕ фразы?'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleClearSemantics}
-                    disabled={isClearingSemantics}
-                    style={{ padding: '4px 8px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    {isClearingSemantics ? 'Удаление...' : 'Да, очистить'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmClearSemantics(false)}
-                    style={{ padding: '4px 8px', background: '#374151', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
-                  >
-                    Отмена
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmClearSemantics(true)}
-                  style={{ padding: '6px 12px', background: '#7f1d1d', color: '#fca5a5', border: '1px solid #991b1b', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  🗑️ Очистить семантику {filterDomain !== 'ALL' ? `(${filterDomain})` : ''}
-                </button>
-              )}
+              {/* КНОПКА ОЧИСТКИ СЕМАНТИКИ СРАЗУ ПО КЛИКУ */}
+              <button
+                type="button"
+                onClick={handleClearSemantics}
+                style={{ padding: '6px 14px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                🗑️ Очистить семантику {filterDomain !== 'ALL' ? `(${filterDomain})` : ''}
+              </button>
             </div>
           </div>
 

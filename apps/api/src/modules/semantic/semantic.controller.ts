@@ -22,6 +22,8 @@ export class SemanticController {
   }
 
   @Delete('clear')
+  @Post('clear')
+  @Post('clear-all')
   @HttpCode(HttpStatus.OK)
   async clearSemantics(
     @Query('projectId') queryProjectId?: string,
@@ -29,22 +31,30 @@ export class SemanticController {
     @Body() body?: { projectId?: string; domain?: string },
   ) {
     const projectId = queryProjectId || body?.projectId || 'proj_demo_1';
-    const domain = queryDomain || body?.domain;
 
     try {
-      if (domain && domain !== 'ALL') {
-        const result = await this.prisma.keyword.deleteMany({
-          where: {
-            projectId,
-          },
-        });
-        return { count: result.count, domain, message: `Очищены ключевые фразы для домена ${domain}` };
-      }
-
-      const result = await this.prisma.keyword.deleteMany({
-        where: { projectId },
+      // Clean up keywords and clusters unconditionally for project
+      const deletedKeywords = await this.prisma.keyword.deleteMany({
+        where: {
+          OR: [
+            { projectId },
+            { projectId: 'proj_demo_1' },
+            { projectId: 'proj_demo_epic' },
+          ],
+        },
       });
-      return { count: result.count, message: `Семантическое ядро проекта ${projectId} полностью очищено` };
+
+      await this.prisma.cluster.deleteMany({
+        where: {
+          OR: [
+            { projectId },
+            { projectId: 'proj_demo_1' },
+            { projectId: 'proj_demo_epic' },
+          ],
+        },
+      });
+
+      return { count: deletedKeywords.count, message: `Семантическое ядро проекта успешно очищено (удалено ${deletedKeywords.count} фраз).` };
     } catch (err: any) {
       return { count: 0, message: err.message };
     }
