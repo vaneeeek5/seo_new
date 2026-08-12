@@ -1,9 +1,10 @@
-import { Controller, Post, Get, Body, Param, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { CollectSemanticDto } from '@seo-saas/shared';
 import { CollectSemanticCommand } from './commands/collect-semantic.command';
 import { RankTrackerService } from './services/rank-tracker.service';
 import { CompetitorAnalysisProcessor } from './services/competitor-analysis.processor';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Controller('semantics')
 export class SemanticController {
@@ -11,13 +12,42 @@ export class SemanticController {
     private readonly commandBus: CommandBus,
     private readonly rankTracker: RankTrackerService,
     private readonly competitorProcessor: CompetitorAnalysisProcessor,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('collect')
   @HttpCode(HttpStatus.ACCEPTED)
   async collectSemantics(@Body() dto: CollectSemanticDto) {
-    // Only accepts DTO and sends Command to Bus (Queue First + CQRS)
     return await this.commandBus.execute(new CollectSemanticCommand(dto));
+  }
+
+  @Delete('clear')
+  @HttpCode(HttpStatus.OK)
+  async clearSemantics(
+    @Query('projectId') queryProjectId?: string,
+    @Query('domain') queryDomain?: string,
+    @Body() body?: { projectId?: string; domain?: string },
+  ) {
+    const projectId = queryProjectId || body?.projectId || 'proj_demo_1';
+    const domain = queryDomain || body?.domain;
+
+    try {
+      if (domain && domain !== 'ALL') {
+        const result = await this.prisma.keyword.deleteMany({
+          where: {
+            projectId,
+          },
+        });
+        return { count: result.count, domain, message: `Очищены ключевые фразы для домена ${domain}` };
+      }
+
+      const result = await this.prisma.keyword.deleteMany({
+        where: { projectId },
+      });
+      return { count: result.count, message: `Семантическое ядро проекта ${projectId} полностью очищено` };
+    } catch (err: any) {
+      return { count: 0, message: err.message };
+    }
   }
 
   @Post('rank-track')

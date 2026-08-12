@@ -12,6 +12,7 @@ import { XmlStockProvider } from './providers/xmlstock.provider';
 import { YandexSearchProvider } from './providers/yandex-search.provider';
 import { RankTrackerService } from './services/rank-tracker.service';
 import { CompetitorAnalysisProcessor } from './services/competitor-analysis.processor';
+import { PrismaService } from '../../infrastructure/database/prisma.service';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CompetitorAnalysisProcessor } from './services/competitor-analysis.proc
     YandexSearchProvider,
     RankTrackerService,
     CompetitorAnalysisProcessor,
+    PrismaService,
   ],
   exports: [
     YandexWordstatProvider,

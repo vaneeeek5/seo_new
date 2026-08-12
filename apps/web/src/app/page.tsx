@@ -249,6 +249,8 @@ export default function DashboardPage() {
   const [sortByVol, setSortByVol] = useState<'desc' | 'asc'>('desc');
   const [filterDomain, setFilterDomain] = useState<string>('ALL');
   const [filterCluster, setFilterCluster] = useState<string>('ALL');
+  const [confirmClearSemantics, setConfirmClearSemantics] = useState<boolean>(false);
+  const [isClearingSemantics, setIsClearingSemantics] = useState<boolean>(false);
   const [keywordsList, setKeywordsList] = useState<Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; intent: 'COMMERCIAL' | 'INFORMATIONAL' | 'NAVIGATIONAL'; source: 'WORDSTAT' | 'SUGGEST' | 'COMPETITOR' | 'AI'; priority: 'HIGH' | 'MEDIUM' | 'LOW' }>>([
     { id: 'kw_1', term: 'роботизированная автомойка', vol: 4800, diff: 34, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'COMPETITOR', priority: 'HIGH' },
     { id: 'kw_2', term: 'робот мойка купить оборудование', vol: 3200, diff: 42, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'WORDSTAT', priority: 'HIGH' },
@@ -606,6 +608,36 @@ export default function DashboardPage() {
       }
     };
     reader.readAsText(file);
+  };
+
+  // Clear Semantics Core Handler
+  const handleClearSemantics = async () => {
+    setIsClearingSemantics(true);
+    const domainText = filterDomain !== 'ALL' ? filterDomain : 'всех сайтов';
+    addLog(`[Очистка семантики] Выполнение запроса очистки ядер (${domainText})...`);
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/semantics/clear?projectId=${selectedProjectId}&domain=${filterDomain}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+
+      if (filterDomain !== 'ALL') {
+        setKeywordsList(prev => prev.filter(k => k.domain !== filterDomain));
+      } else {
+        setKeywordsList([]);
+      }
+
+      setConfirmClearSemantics(false);
+      setToastMessage(`🗑️ Семантическое ядро ${filterDomain !== 'ALL' ? `для ${filterDomain}` : ''} успешно очищено! (${data.count || 0} фраз)`);
+      setTimeout(() => setToastMessage(null), 5000);
+      addLog(`[Очистка семантики] Успешно удалено ${data.count || 0} фраз (${domainText}).`);
+    } catch (err: any) {
+      addLog(`[Ошибка Очистки] ${err.message}`);
+    } finally {
+      setIsClearingSemantics(false);
+    }
   };
 
   // Project Creation
@@ -1605,14 +1637,46 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', color: '#9ca3af' }}>Сортировка по частотности:</span>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', color: '#9ca3af' }}>Сортировка:</span>
               <button
                 onClick={() => setSortByVol(prev => prev === 'desc' ? 'asc' : 'desc')}
                 style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #374151', background: '#1f2937', color: '#38bdf8', fontSize: '13px', cursor: 'pointer' }}
               >
-                {sortByVol === 'desc' ? '⬇ По убыванию (Высокая → Низкая)' : '⬆ По возрастанию'}
+                {sortByVol === 'desc' ? '⬇ По убыванию' : '⬆ По возрастанию'}
               </button>
+
+              {/* КНОПКА ОЧИСТКИ СЕМАНТИКИ ДЛЯ САЙТА / ПРОЕКТА */}
+              {confirmClearSemantics ? (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', background: '#451a1a', padding: '4px 8px', borderRadius: '6px', border: '1px solid #991b1b' }}>
+                  <span style={{ fontSize: '11px', color: '#fca5a5', fontWeight: 600 }}>
+                    {filterDomain !== 'ALL' ? `Удалить ядро ${filterDomain}?` : 'Очистить ВСЕ фразы?'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearSemantics}
+                    disabled={isClearingSemantics}
+                    style={{ padding: '4px 8px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {isClearingSemantics ? 'Удаление...' : 'Да, очистить'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearSemantics(false)}
+                    style={{ padding: '4px 8px', background: '#374151', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                  >
+                    Отмена
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearSemantics(true)}
+                  style={{ padding: '6px 12px', background: '#7f1d1d', color: '#fca5a5', border: '1px solid #991b1b', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  🗑️ Очистить семантику {filterDomain !== 'ALL' ? `(${filterDomain})` : ''}
+                </button>
+              )}
             </div>
           </div>
 
