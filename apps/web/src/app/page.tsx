@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTaskStream } from '../hooks/useTaskStream';
 import { getApiBaseUrl } from '../lib/api';
 
@@ -251,14 +251,26 @@ export default function DashboardPage() {
   const [filterCluster, setFilterCluster] = useState<string>('ALL');
   const [confirmClearSemantics, setConfirmClearSemantics] = useState<boolean>(false);
   const [isClearingSemantics, setIsClearingSemantics] = useState<boolean>(false);
-  const [keywordsList, setKeywordsList] = useState<Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; intent: 'COMMERCIAL' | 'INFORMATIONAL' | 'NAVIGATIONAL'; source: 'WORDSTAT' | 'SUGGEST' | 'COMPETITOR' | 'AI'; priority: 'HIGH' | 'MEDIUM' | 'LOW' }>>([
-    { id: 'kw_1', term: 'роботизированная автомойка', vol: 4800, diff: 34, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'COMPETITOR', priority: 'HIGH' },
-    { id: 'kw_2', term: 'робот мойка купить оборудование', vol: 3200, diff: 42, cluster: 'Оборудование и услуги', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'WORDSTAT', priority: 'HIGH' },
-    { id: 'kw_3', term: 'бесконтактная робот автомойка цена', vol: 1920, diff: 28, cluster: 'Цены и окупаемость', domain: 'epicarwash.com', intent: 'COMMERCIAL', source: 'WORDSTAT', priority: 'HIGH' },
-    { id: 'kw_4', term: 'конструкторская документация роботизированной автомойки', vol: 1450, diff: 22, cluster: 'Запросы со словами', domain: 'epicarwash.com', intent: 'INFORMATIONAL', source: 'WORDSTAT', priority: 'MEDIUM' },
-    { id: 'kw_5', term: 'роботизированная автомойка рядом в москве', vol: 1240, diff: 19, cluster: 'Поисковые подсказки', domain: 'epicarwash.com', intent: 'NAVIGATIONAL', source: 'SUGGEST', priority: 'HIGH' },
-    { id: 'kw_6', term: 'официальный сайт epicarwash', vol: 980, diff: 15, cluster: 'Бренд', domain: 'epicarwash.com', intent: 'NAVIGATIONAL', source: 'COMPETITOR', priority: 'MEDIUM' },
-  ]);
+  const [keywordsList, setKeywordsList] = useState<Array<{ id: string; term: string; vol: number; diff: number; cluster: string; domain: string; intent: 'COMMERCIAL' | 'INFORMATIONAL' | 'NAVIGATIONAL'; source: 'WORDSTAT' | 'SUGGEST' | 'COMPETITOR' | 'AI'; priority: 'HIGH' | 'MEDIUM' | 'LOW' }>>([]);
+
+  // Fetch saved keywords from Prisma DB for current project
+  useEffect(() => {
+    const fetchSavedKeywords = async () => {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/semantics/keywords/${selectedProjectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setKeywordsList(data);
+          }
+        }
+      } catch (err) {
+        // Quiet
+      }
+    };
+    fetchSavedKeywords();
+  }, [selectedProjectId]);
 
   // Content Generation State (Step 3 & 4: Edit/Preview, Multi-stage generation UI & Options)
   const [topicInput, setTopicInput] = useState('');

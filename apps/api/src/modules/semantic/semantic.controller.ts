@@ -21,6 +21,34 @@ export class SemanticController {
     return await this.commandBus.execute(new CollectSemanticCommand(dto));
   }
 
+  @Get('keywords/:projectId')
+  async getKeywords(@Param('projectId') projectId: string) {
+    const keywords = await this.prisma.keyword.findMany({
+      where: {
+        OR: [
+          { projectId },
+          { projectId: 'proj_demo_1' },
+        ],
+      },
+      include: {
+        cluster: true,
+      },
+      orderBy: { searchVol: 'desc' },
+    });
+
+    return keywords.map(kw => ({
+      id: kw.id,
+      term: kw.term,
+      vol: kw.searchVol,
+      diff: kw.difficulty,
+      cluster: kw.cluster?.name || 'Пользовательские ключи',
+      domain: 'epicarwash.com',
+      intent: kw.intent || 'COMMERCIAL',
+      source: kw.source || 'WORDSTAT',
+      priority: kw.searchVol > 2000 ? 'HIGH' : kw.searchVol > 500 ? 'MEDIUM' : 'LOW',
+    }));
+  }
+
   @Delete('clear')
   @Post('clear')
   @Post('clear-all')
