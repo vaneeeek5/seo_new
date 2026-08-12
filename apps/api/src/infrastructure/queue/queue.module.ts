@@ -10,6 +10,7 @@ import { BullModule } from '@nestjs/bullmq';
         port: parseInt(process.env.REDIS_PORT || '6379', 10),
         enableOfflineQueue: true,
         maxRetriesPerRequest: null,
+        retryStrategy: (times: number) => Math.min(times * 200, 3000),
       },
     }),
     BullModule.registerQueue(

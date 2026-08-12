@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const NESTJS_API = process.env.INTERNAL_API_URL || 'http://api:4000';
 
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3, delayMs = 500): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw new Error('Fetch failed after retries');
+}
+
 async function proxyToNestJS(request: NextRequest, path: string): Promise<NextResponse> {
   const targetUrl = new URL(request.url);
   const searchParams = targetUrl.search;
@@ -14,12 +26,12 @@ async function proxyToNestJS(request: NextRequest, path: string): Promise<NextRe
       'Content-Type': 'application/json',
     };
 
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       method: request.method,
       headers,
       body,
       signal: AbortSignal.timeout(12000),
-    });
+    }, 3, 500);
 
     const responseText = await res.text();
     let responseData: unknown;
