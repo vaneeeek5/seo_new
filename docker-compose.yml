@@ -43,6 +43,8 @@ services:
     container_name: seo_saas_web
     environment:
       PORT: '3000'
+      INTERNAL_API_URL: 'http://api:4000'
+      NEXT_PUBLIC_API_URL: 'http://80.78.241.208/api'
     ports:
       - '3000:3000'
     depends_on:
