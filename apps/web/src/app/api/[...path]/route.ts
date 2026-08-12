@@ -50,43 +50,10 @@ async function proxyToNestJS(request: NextRequest, path: string): Promise<NextRe
     return NextResponse.json(responseData, { status: res.status });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'unknown error';
-    console.warn(`[Next.js API Proxy Warning] Path: ${path}, Fallback handler used: ${message}`);
-
-    if (path.startsWith('integrations')) {
-      if (request.method === 'POST') {
-        let bodyJson: any = {};
-        try {
-          const bodyText = await request.text();
-          bodyJson = JSON.parse(bodyText);
-        } catch (_) {}
-
-        const key = bodyJson.apiKey || 'key-****';
-        const maskedKey = key.length > 8 ? `${key.substring(0, 4)}...${key.substring(key.length - 4)}` : 'key-****';
-
-        return NextResponse.json({
-          success: true,
-          connectionId: `conn_${Date.now()}`,
-          provider: bodyJson.provider || 'YANDEX_WORDSTAT',
-          maskedKey,
-          status: 'ENCRYPTED_AND_SAVED',
-        }, { status: 200 });
-      }
-
-      if (request.method === 'GET') {
-        return NextResponse.json([], { status: 200 });
-      }
-    }
-
-    if (path.startsWith('projects') && request.method === 'GET') {
-      return NextResponse.json([
-        { id: 'proj_demo_1', name: 'SEO SaaS Platform', domain: 'seo-saas.com', date: new Date().toLocaleDateString('ru-RU') },
-        { id: 'proj_demo_epic', name: 'Epic Car Wash', domain: 'epicarwash.com', date: new Date().toLocaleDateString('ru-RU') },
-      ], { status: 200 });
-    }
-
+    console.error(`[API Proxy ERROR] ${path}: ${message}`);
     return NextResponse.json(
-      { success: false, error: 'Backend server initializing...', details: message },
-      { status: 200 }
+      { success: false, error: 'API сервер недоступен. Убедитесь что Docker контейнер api запущен.', details: message },
+      { status: 503 }
     );
   }
 }

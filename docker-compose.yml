@@ -11,6 +11,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seo_saas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -18,6 +24,12 @@ services:
     volumes:
       - redis_data:/data
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   api:
     build:
@@ -29,12 +41,21 @@ services:
       REDIS_HOST: 'redis'
       REDIS_PORT: '6379'
       PORT: '4000'
+      NODE_ENV: 'production'
     ports:
       - '4000:4000'
     depends_on:
-      - postgres
-      - redis
-    restart: always
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   web:
     build:
@@ -48,7 +69,8 @@ services:
     ports:
       - '3000:3000'
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: always
 
   nginx:
@@ -60,7 +82,6 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - web
-      - api
     restart: always
 
 volumes:
