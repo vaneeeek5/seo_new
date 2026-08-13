@@ -21,8 +21,8 @@ export class CollectSemanticHandler implements ICommandHandler<CollectSemanticCo
     
     this.logger.log(`Enqueueing CollectSemanticCommand into BullMQ queue for project: ${dto.projectId} (${taskId})`);
 
-    // Dispatch job to BullMQ queue
-    await this.semanticQueue.add('collect-semantics-job', {
+    // Dispatch job to BullMQ queue non-blocking
+    this.semanticQueue.add('collect-semantics-job', {
       taskId,
       projectId: dto.projectId,
       seedKeywords: dto.seedKeywords,
