@@ -18,7 +18,6 @@ import { EncryptionService } from '../../infrastructure/security/encryption.serv
 @Module({
   imports: [
     CqrsModule,
-    BullModule.registerQueue({ name: 'semantic-queue' }),
   ],
   controllers: [SemanticController],
   providers: [
