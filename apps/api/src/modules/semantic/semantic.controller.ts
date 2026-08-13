@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Param, Query, HttpCode, HttpStatus, HttpException } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import { CollectSemanticDto } from '@seo-saas/shared';
 import { CollectSemanticCommand } from './commands/collect-semantic.command';
@@ -117,7 +117,19 @@ export class SemanticController {
       }
 
       // 3. Query Yandex Wordstat API for exact live volume
-      const volumeMap = await this.wordstatProvider.getSearchVolume(cleanUserKeywords, projId, regionId || 225);
+      let volumeMap: Record<string, number> = {};
+      try {
+        volumeMap = await this.wordstatProvider.getSearchVolume(cleanUserKeywords, projId, regionId || 225);
+      } catch (wordstatErr: any) {
+        const rawDetail = wordstatErr?.response?.data
+          ? JSON.stringify(wordstatErr.response.data)
+          : wordstatErr?.message || String(wordstatErr);
+        console.error('[WORDSTAT COLLECT ERROR]', rawDetail);
+        throw new HttpException(
+          JSON.stringify({ yandexError: rawDetail, message: 'Ошибка при запросе к Yandex Wordstat API' }),
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
 
       // 4. Batch intent classification
       const classified = this.intentFilterService.batchClassify(cleanUserKeywords);
@@ -188,11 +200,14 @@ export class SemanticController {
         keywords: savedItems,
       };
     } catch (err: any) {
-      return {
-        success: false,
-        error: err.message,
-        keywords: [],
-      };
+      // Re-throw HttpException as-is (e.g. from Wordstat block)
+      if (err instanceof HttpException) throw err;
+      const errMsg = err?.message || String(err);
+      console.error('[SEMANTIC COLLECT ERROR]', errMsg);
+      throw new HttpException(
+        JSON.stringify({ message: errMsg }),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 

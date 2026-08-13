@@ -845,7 +845,23 @@ export default function DashboardPage() {
       try {
         data = JSON.parse(rawText);
       } catch {
-        data = { error: `Сервер вернул ответ (HTTP ${res.status}): ${rawText.substring(0, 120)}` };
+        data = { error: `Сервер вернул ответ (HTTP ${res.status}): ${rawText.substring(0, 300)}` };
+      }
+
+      // Non-OK HTTP status — expose raw Yandex error for debugging
+      if (!res.ok) {
+        // NestJS HttpException wraps message in data.message or data itself
+        const errBody = data?.message || rawText;
+        let parsedErr: any = {};
+        try { parsedErr = JSON.parse(errBody); } catch { parsedErr = { message: errBody }; }
+
+        const yandexRaw = parsedErr?.yandexError || parsedErr?.message || errBody;
+        const fullMsg = `❌ Ошибка Яндекс API (HTTP ${res.status}):\n${yandexRaw}`;
+        // Show raw error in alert so it's fully readable
+        alert(fullMsg);
+        setToastMessage(`❌ Ошибка API: смотри alert-диалог с полным текстом ошибки Яндекса`);
+        addLog(`[Яндекс API RAW Ошибка] HTTP ${res.status}: ${yandexRaw}`);
+        return;
       }
 
       if (data?.keywords && Array.isArray(data.keywords) && data.keywords.length > 0) {

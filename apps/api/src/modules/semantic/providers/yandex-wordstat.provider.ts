@@ -149,6 +149,13 @@ export class YandexWordstatProvider implements ISemanticProvider {
       }
     }
 
+    // If every attempt failed with a non-success status, expose raw Yandex error
+    if (lastStatus !== 0 && lastStatus !== 200) {
+      const errPayload = `Yandex API HTTP ${lastStatus}: ${lastMsg.substring(0, 800)}`;
+      this.logger.error(`[Yandex Wordstat] Throwing raw error for debugging: ${errPayload}`);
+      throw new Error(errPayload);
+    }
+
     return { volume: 0, topRequests: [], similarRequests: [], rawStatus: lastStatus, rawMessage: lastMsg };
   }
 
