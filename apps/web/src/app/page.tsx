@@ -301,7 +301,7 @@ export default function DashboardPage() {
         const res = await fetch(`${baseUrl}/integrations?projectId=${selectedProjectId}`);
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setConnectionsList(data);
           }
         }
