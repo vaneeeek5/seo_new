@@ -839,7 +839,14 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: selectedProjectId, seedKeywords: userKeywords, regionId: selectedRegionId })
       });
-      const data = await res.json();
+
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { error: `Сервер вернул ответ (HTTP ${res.status}): ${rawText.substring(0, 120)}` };
+      }
 
       if (data?.keywords && Array.isArray(data.keywords) && data.keywords.length > 0) {
         setKeywordsList(prev => {
