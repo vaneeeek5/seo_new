@@ -109,7 +109,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(4000),
         });
 
         const respText = await response.text();
@@ -137,6 +137,10 @@ export class YandexWordstatProvider implements ISemanticProvider {
           const volume = exactMatch ? exactMatch.count : topRequests[0]?.count || 0;
 
           return { volume, topRequests, similarRequests, rawStatus: response.status, rawMessage: respText };
+        }
+        // If Yandex API returned HTTP 400, 401, 403, 404 - break immediately, don't waste time trying option B
+        if (response.status >= 400 && response.status < 500) {
+          break;
         }
       } catch (err: any) {
         lastMsg = err.message;
@@ -216,17 +220,19 @@ export class YandexWordstatProvider implements ISemanticProvider {
     const result: Record<string, number> = {};
     if (!keywords || keywords.length === 0) return result;
 
-    // 1. Official Yandex Search API Wordstat (v2 / AI Studio)
+    // 1. Official Yandex Search API Wordstat (v2 / AI Studio) - Parallel execution
     const yandexAuth = await this.getDecryptedIntegration(projectId);
     if (yandexAuth) {
-      for (const kw of keywords) {
-        const res = await this.queryYandexSearchApiWordstat(kw, yandexAuth.apiKey, yandexAuth.folderId, regionId);
-        if (res.volume > 0) {
-          result[kw] = res.volume;
-        } else if (res.topRequests.length > 0) {
-          result[kw] = res.topRequests[0].count;
-        }
-      }
+      await Promise.all(
+        keywords.map(async (kw) => {
+          const res = await this.queryYandexSearchApiWordstat(kw, yandexAuth.apiKey, yandexAuth.folderId, regionId);
+          if (res.volume > 0) {
+            result[kw] = res.volume;
+          } else if (res.topRequests.length > 0) {
+            result[kw] = res.topRequests[0].count;
+          }
+        })
+      );
     }
 
     // 2. XmlStock API Volume Lookup (if active XmlStock connection exists)
