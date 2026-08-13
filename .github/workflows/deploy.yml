@@ -56,6 +56,9 @@ jobs:
               git clone https://github.com/vaneeeek5/seo_saas.git .
             fi
             
+            chmod +x scripts/setup-server.sh
+            ./scripts/setup-server.sh
+            
             echo "🐳 Launching Docker Compose stack..."
             docker compose down --remove-orphans || true
             docker compose up -d --build --force-recreate

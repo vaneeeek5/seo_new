@@ -6,11 +6,14 @@ echo "🛠 Preparing Server Environment & Installing Docker..."
 echo "=================================================="
 
 # 1. Ensure UFW and iptables allow incoming traffic on HTTP (port 80) and SSH (port 22)
-echo "🔓 Ensuring UFW firewall allows HTTP and SSH..."
+echo "🔓 Ensuring UFW firewall and iptables allow HTTP and SSH..."
 ufw allow 80/tcp || true
 ufw allow 22/tcp || true
 ufw allow 4000/tcp || true
 ufw allow 3000/tcp || true
+iptables -I INPUT -p tcp --dport 80 -j ACCEPT || true
+iptables -I INPUT -p tcp --dport 4000 -j ACCEPT || true
+iptables -I INPUT -p tcp --dport 3000 -j ACCEPT || true
 
 # 2. Update package lists
 apt-get update -y -qq
