@@ -66,8 +66,8 @@ jobs:
             echo "⏳ Waiting 12s for containers to initialize..."
             sleep 12
             
-            echo "🔄 Reloading Nginx to update container IP resolution..."
-            docker compose exec -T nginx nginx -s reload || docker compose restart nginx || true
+            echo "🔄 Restarting Nginx container to resolve active container IPs..."
+            docker compose restart nginx || true
             
             echo "🔍 Syncing PostgreSQL Prisma schema..."
             docker compose exec -T api npx prisma db push --schema=apps/api/prisma/schema.prisma --accept-data-loss || true
