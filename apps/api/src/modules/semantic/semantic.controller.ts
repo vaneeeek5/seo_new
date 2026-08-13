@@ -31,29 +31,35 @@ export class SemanticController {
       if (!activeConnection) {
         return {
           connected: false,
-          statusMessage: '❌ Активные интеграционные ключи в базе данных не найдены.',
-          details: 'Добавьте API ключ на странице "Центр Интеграций".',
+          statusMessage: '❌ Активные API-ключи в базе данных не найдены. Добавьте ключ в Центр Интеграций.',
         };
       }
 
-      // Test live call for keyword "автомойка"
-      const testVolume = await this.wordstatProvider.getSearchVolume(['автомойка'], projectId || 'proj_demo_1', 225);
+      // Пробуем быстрый живой запрос с явным таймаутом
+      const testVolume = await Promise.race([
+        this.wordstatProvider.getSearchVolume(['автомойка'], projectId || 'proj_demo_1', 225),
+        new Promise<Record<string, number>>((_, reject) =>
+          setTimeout(() => reject(new Error('Yandex API: таймаут 12 секунд — ключ может быть неверен или нет folderId')), 12000)
+        ),
+      ]) as Record<string, number>;
+
       const vol = testVolume['автомойка'] || 0;
 
       return {
-        connected: true,
+        connected: vol > 0,
         provider: activeConnection.provider,
         maskedKey: activeConnection.maskedKey,
         testKeyword: 'автомойка',
         volume: vol,
         statusMessage: vol > 0
-          ? `✅ Успешное подключение к Yandex Search API Wordstat! Найдена частотность: ${vol} показов/мес.`
-          : `⚠️ Ключ зашифрован в БД (${activeConnection.maskedKey}), но API вернуло 0. Проверьте права и баланс API-ключа в Yandex Cloud.`,
+          ? `✅ Yandex Wordstat работает! Частотность «автомойка»: ${vol} показов/мес.`
+          : `⚠️ Ключ найден (${activeConnection.maskedKey}), но API вернуло 0. Проверьте логи NestJS — там будет HTTP-код ошибки от Yandex.`,
       };
     } catch (err: any) {
+      console.error('[WORDSTAT STATUS ERROR]', err.message);
       return {
         connected: false,
-        statusMessage: `❌ Ошибка проверки подключения: ${err.message}`,
+        statusMessage: `❌ Ошибка: ${err.message}`,
       };
     }
   }

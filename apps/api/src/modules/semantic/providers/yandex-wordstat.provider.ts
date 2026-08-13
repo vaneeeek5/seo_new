@@ -94,7 +94,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
     const payload = {
       phrase,
       numPhrases: 50,
-      regions: [regionId],
+      regions: [String(regionId)],  // API требует строку, не число
       devices: ['DEVICE_ALL'],
       ...(folderId ? { folderId } : {}),
     };
@@ -109,12 +109,14 @@ export class YandexWordstatProvider implements ISemanticProvider {
           method: 'POST',
           headers,
           body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(8000),
         });
 
         const respText = await response.text();
         lastStatus = response.status;
         lastMsg = respText;
 
+        console.log(`[WORDSTAT API] HTTP ${response.status} для фразы "${phrase}": ${respText.substring(0, 400)}`);
         this.logger.log(`[Yandex Wordstat API Response HTTP ${response.status}] ${respText.substring(0, 300)}`);
 
         if (response.ok) {
@@ -138,6 +140,7 @@ export class YandexWordstatProvider implements ISemanticProvider {
         }
       } catch (err: any) {
         lastMsg = err.message;
+        console.error(`[WORDSTAT ERROR] Запрос к Yandex Wordstat API завис/упал: ${err.message}`);
         this.logger.error(`[Yandex Search API Wordstat Error] ${err.message}`);
       }
     }
