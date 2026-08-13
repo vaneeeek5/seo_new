@@ -5,10 +5,12 @@ echo "=================================================="
 echo "🛠 Preparing Server Environment & Installing Docker..."
 echo "=================================================="
 
-# 1. Disable UFW Firewall & reset iptables blocking rules
-echo "🔓 Disabling UFW firewall and clearing iptables blocking..."
-ufw disable || true
-iptables -F || true
+# 1. Ensure UFW and iptables allow incoming traffic on HTTP (port 80) and SSH (port 22)
+echo "🔓 Ensuring UFW firewall allows HTTP and SSH..."
+ufw allow 80/tcp || true
+ufw allow 22/tcp || true
+ufw allow 4000/tcp || true
+ufw allow 3000/tcp || true
 
 # 2. Update package lists
 apt-get update -y -qq
