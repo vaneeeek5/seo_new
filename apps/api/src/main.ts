@@ -9,16 +9,27 @@ import { Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 process.on('unhandledRejection', (reason: any) => {
-  console.warn('[Process Warning] Unhandled Rejection:', reason?.message || reason);
+  console.error('[FATAL] Unhandled Rejection:', reason?.message || reason, reason?.stack);
 });
 
 process.on('uncaughtException', (err: any) => {
-  console.warn('[Process Warning] Uncaught Exception:', err?.message || err);
+  console.error('[FATAL] Uncaught Exception:', err?.message || err, err?.stack);
 });
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  console.log('[Bootstrap] Starting NestJS application...');
+
+  let app: any;
+  try {
+    app = await NestFactory.create(AppModule, {
+      logger: ['log', 'warn', 'error', 'debug'],
+    });
+    console.log('[Bootstrap] AppModule created successfully');
+  } catch (err: any) {
+    console.error('[Bootstrap FATAL] Failed to create AppModule:', err.message, err.stack);
+    process.exit(1);
+  }
   
   app.enableCors({
     origin: '*',
@@ -45,7 +56,11 @@ async function bootstrap() {
 
   const port = process.env.PORT || 4000;
   await app.listen(port, '0.0.0.0');
-  logger.log(`SEO Content Factory API running on 0.0.0.0:${port}`);
-  logger.log(`OpenAPI Swagger documentation available at http://0.0.0.0:${port}/api/docs`);
+  console.log(`[Bootstrap] ✅ SEO Content Factory API started on 0.0.0.0:${port}`);
+  logger.log(`OpenAPI Swagger: http://0.0.0.0:${port}/api/docs`);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('[Bootstrap FATAL] bootstrap() threw:', err?.message, err?.stack);
+  process.exit(1);
+});
+
