@@ -248,18 +248,20 @@ export class YandexWordstatProvider implements ISemanticProvider {
         const decryptedKey = this.encryption.decrypt(xmlConn.encryptedKey, xmlConn.iv, xmlConn.authTag);
         const config = (xmlConn.config as any) || {};
 
-        for (const kw of keywords) {
-          if (!result[kw] || result[kw] === 0) {
-            const xmlData = await this.xmlStockProvider.getWordstatData(
-              kw,
-              { userId: config.userId || '', key: decryptedKey, ...config },
-              regionId
-            );
-            if (xmlData.volume && xmlData.volume > 0) {
-              result[kw] = xmlData.volume;
+        await Promise.all(
+          keywords.map(async (kw) => {
+            if (!result[kw] || result[kw] === 0) {
+              const xmlData = await this.xmlStockProvider.getWordstatData(
+                kw,
+                { userId: config.userId || '', key: decryptedKey, ...config },
+                regionId
+              );
+              if (xmlData.volume && xmlData.volume > 0) {
+                result[kw] = xmlData.volume;
+              }
             }
-          }
-        }
+          })
+        );
       }
     } catch (err: any) {
       this.logger.warn(`[WordstatProvider XmlStock Volume Lookup] ${err.message}`);
