@@ -312,6 +312,7 @@ export default function DashboardPage() {
 
   // Semantics State
   const [seedInput, setSeedInput] = useState('');
+  const [isCollecting, setIsCollecting] = useState<boolean>(false);
   const [nicheTopicsInput, setNicheTopicsInput] = useState('');
   const [selectedRegionId, setSelectedRegionId] = useState<number>(225);
   const [sortByVol, setSortByVol] = useState<'desc' | 'asc'>('desc');
@@ -816,6 +817,7 @@ export default function DashboardPage() {
       return;
     }
 
+    setIsCollecting(true);
     try {
       const baseUrl = getApiBaseUrl();
       // Split user keywords by line or comma
@@ -824,7 +826,10 @@ export default function DashboardPage() {
         .map(s => s.trim())
         .filter(Boolean);
 
-      if (userKeywords.length === 0) return;
+      if (userKeywords.length === 0) {
+        setIsCollecting(false);
+        return;
+      }
 
       const selectedRegionName = REGION_OPTIONS.find(r => r.id === selectedRegionId)?.name || 'Россия';
       addLog(`[Сбор Частотности] Запрос частотности по ${userKeywords.length} пользовательским ключам (Проект: ${selectedProjectId}, Регион: ${selectedRegionName})...`);
@@ -845,12 +850,16 @@ export default function DashboardPage() {
         setToastMessage(`📊 Вордстат API вернул частотность для ${data.keywords.length} фраз!`);
         addLog(`[Вордстат API] Успешно получена частотность из Yandex Wordstat API для ${data.keywords.length} фраз.`);
       } else {
-        setToastMessage(`⚠️ Вордстат API не вернул показов. Проверьте подключение Yandex API ключа в Настройках.`);
-        addLog(`[Предупреждение Вордстат] Запрос выполнен, но Вордстат API не вернул показов по данным фразам.`);
+        const errorMsg = data?.error || 'Вордстат API не вернул показов. Проверьте подключение Yandex API ключа в Настройках.';
+        setToastMessage(`⚠️ ${errorMsg}`);
+        addLog(`[Предупреждение Вордстат] ${errorMsg}`);
       }
       setSeedInput('');
     } catch (err: any) {
       addLog(`[Ошибка Сбора] ${err.message}`);
+      setToastMessage(`❌ Ошибка запроса: ${err.message}`);
+    } finally {
+      setIsCollecting(false);
     }
   };
 
@@ -1604,11 +1613,186 @@ export default function DashboardPage() {
       )}
 
       {/* ============================================================ */}
-      {/* ВКЛАДКА 2: СЕМАНТИКА */}
+      {/* ВКЛАДКА 2: СЕМАНТИКА (YANDEX WORDSTAT API) */}
       {/* ============================================================ */}
       {activeTab === 'semantics' && (
-        <div style={{ background: '#111827', borderRadius: '12px', padding: '40px', border: '1px solid #1f2937', minHeight: '400px' }}>
-          {/* Пустая страница */}
+        <div style={{ background: '#111827', borderRadius: '16px', padding: '32px', border: '1px solid #1f2937', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}>
+          {/* Header */}
+          <div style={{ marginBottom: '28px', borderBottom: '1px solid #1f2937', paddingBottom: '20px' }}>
+            <h2 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span>📊</span> Яндекс Вордстат (Yandex Search API / AI Studio)
+            </h2>
+            <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>
+              Запрос показов и частотности ключевых фраз через официальный API Яндекс Вордстат (aistudio.yandex.ru).
+            </p>
+          </div>
+
+          {/* Keyword Input & Action Card */}
+          <form onSubmit={handleCollectSemantics} style={{ background: '#1f2937', padding: '24px', borderRadius: '14px', border: '1px solid #374151', marginBottom: '32px' }}>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#f0f9ff', marginBottom: '8px' }}>
+                📝 Ключевые слова (через запятую или с новой строки):
+              </label>
+              <textarea
+                rows={5}
+                placeholder={`роботизированная автомойка\nробот мойка купить оборудование, автомойка самообслуживания цена\nмойка машин робот`}
+                value={seedInput}
+                onChange={(e) => setSeedInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid #0284c7',
+                  background: '#0f172a',
+                  color: '#f8fafc',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  lineHeight: '1.6',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                  resize: 'vertical',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1', minWidth: '240px' }}>
+                <label style={{ display: 'block', fontSize: '13px', color: '#9ca3af', marginBottom: '6px' }}>
+                  🌍 Регион поиска (Yandex Geo):
+                </label>
+                <select
+                  value={selectedRegionId}
+                  onChange={(e) => setSelectedRegionId(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #374151',
+                    background: '#0f172a',
+                    color: '#f8fafc',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  {REGION_OPTIONS.map(r => (
+                    <option key={r.id} value={r.id}>{r.name} (ID: {r.id})</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isCollecting}
+                style={{
+                  padding: '14px 36px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  backgroundColor: isCollecting ? '#475569' : '#0284c7',
+                  color: '#ffffff',
+                  fontSize: '15px',
+                  fontWeight: 700,
+                  cursor: isCollecting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: isCollecting ? 'none' : '0 4px 14px rgba(2, 132, 199, 0.4)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {isCollecting ? (
+                  <>⏳ Идёт сбор частотности...</>
+                ) : (
+                  <>🚀 Запуск</>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Results Display */}
+          {keywordsList.length > 0 ? (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '16px', color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>📋</span> Частотность из Яндекс Вордстат ({keywordsList.length} фраз):
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleClearSemantics}
+                  style={{
+                    padding: '6px 14px',
+                    background: '#7f1d1d',
+                    color: '#fca5a5',
+                    border: '1px solid #991b1b',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  🗑️ Очистить результаты
+                </button>
+              </div>
+
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#1f2937', borderRadius: '10px', overflow: 'hidden' }}>
+                  <thead>
+                    <tr style={{ background: '#0f172a', color: '#9ca3af', textAlign: 'left', fontSize: '13px', borderBottom: '1px solid #374151' }}>
+                      <th style={{ padding: '14px 16px', width: '50px' }}>№</th>
+                      <th style={{ padding: '14px 16px' }}>Ключевая фраза</th>
+                      <th style={{ padding: '14px 16px' }}>Частотность (показов/мес в Яндекс)</th>
+                      <th style={{ padding: '14px 16px', textAlign: 'right' }}>Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {keywordsList.map((kw, idx) => {
+                      const maxVol = Math.max(...keywordsList.map(k => k.vol), 100);
+                      const volPct = Math.min(100, Math.max(4, Math.round((kw.vol / maxVol) * 100)));
+
+                      return (
+                        <tr key={kw.id || idx} style={{ borderBottom: '1px solid #374151', color: '#f8fafc', fontSize: '14px' }}>
+                          <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '13px' }}>{idx + 1}</td>
+                          <td style={{ padding: '14px 16px', fontWeight: 600, color: '#e0f2fe' }}>{kw.term}</td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <span style={{ fontWeight: 700, color: '#38bdf8', minWidth: '70px', fontSize: '15px' }}>
+                                {kw.vol ? kw.vol.toLocaleString('ru-RU') : 0}
+                              </span>
+                              <div style={{ flex: 1, background: '#0f172a', height: '8px', borderRadius: '4px', overflow: 'hidden', maxWidth: '160px' }}>
+                                <div style={{ width: `${volPct}%`, background: 'linear-gradient(90deg, #0284c7, #38bdf8)', height: '100%', borderRadius: '4px' }} />
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                            <button
+                              onClick={() => handleRemoveKeyword(kw.id)}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                border: '1px solid #475569',
+                                background: '#0f172a',
+                                color: '#94a3b8',
+                                fontSize: '12px',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              🗑️ Удалить
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '48px 24px', background: '#1f2937', borderRadius: '14px', border: '1px dashed #374151', color: '#64748b' }}>
+              <div style={{ fontSize: '36px', marginBottom: '12px' }}>📊</div>
+              <p style={{ fontSize: '14px', margin: 0, color: '#94a3b8' }}>
+                Введите ключевые слова выше и нажмите <strong>«🚀 Запуск»</strong> для получения частотности из Yandex Wordstat API.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
