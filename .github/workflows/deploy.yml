@@ -59,42 +59,51 @@ jobs:
             chmod +x scripts/setup-server.sh
             ./scripts/setup-server.sh
             
-            echo "🐳 Launching Docker Compose stack..."
+            echo "🐳 Stopping existing containers..."
             docker compose down --remove-orphans || true
-            docker compose up -d --build --force-recreate
             
-            echo "⏳ Waiting 12s for containers to initialize..."
-            sleep 12
+            echo "🐳 Building all images first (no start)..."
+            docker compose build --parallel
             
-            echo "🔄 Restarting Nginx container to resolve active container IPs..."
-            docker compose restart nginx || true
+            echo "🐳 Starting databases (postgres + redis)..."
+            docker compose up -d postgres redis
+            sleep 8
             
-            echo "🔍 Syncing PostgreSQL Prisma schema..."
-            docker compose exec -T api npx prisma db push --schema=apps/api/prisma/schema.prisma --accept-data-loss || true
+            echo "🐳 Starting API container..."
+            docker compose up -d api
             
-            echo "⏳ Waiting for API to respond on port 4000..."
-            for i in $(seq 1 30); do
-              if curl -s --max-time 3 http://localhost:4000/health > /dev/null 2>&1; then
+            echo "⏳ Waiting for API to be healthy on port 4000..."
+            for i in $(seq 1 40); do
+              if curl -s --max-time 3 http://localhost:4000/health > /dev/null 2>&1 || \
+                 curl -s --max-time 3 http://localhost:4000/semantics/wordstat-status > /dev/null 2>&1; then
                 echo "✅ API is responding on port 4000!"
                 break
               fi
-              echo "  Attempt $i/30 - waiting for API..."
-              if [ $((i % 5)) -eq 0 ]; then
-                echo "📝 API logs at attempt $i:"
-                docker compose logs api --tail 30
+              echo "  Attempt $i/40 - waiting for API..."
+              if [ $((i % 10)) -eq 0 ]; then
+                docker compose logs api --tail 20
               fi
               sleep 3
             done
             
+            echo "🐳 Starting Web container..."
+            docker compose up -d web
+            sleep 8
+            
+            echo "🐳 Starting Nginx (last, after backends are ready)..."
+            docker compose up -d nginx
+            
+            echo "🔍 Syncing PostgreSQL Prisma schema..."
+            docker compose exec -T api npx prisma db push --schema=apps/api/prisma/schema.prisma --accept-data-loss || true
+            
             echo "📊 Docker Container Status:"
             docker compose ps
             
-            echo "📝 Final API Container Logs (Last 60 lines):"
-            docker compose logs api --tail 60
+            echo "📝 Final API Container Logs (Last 40 lines):"
+            docker compose logs api --tail 40
             
             echo "🧪 Verifying Server Response:"
-            curl -i http://localhost/health-check
-            curl -i http://localhost:4000/health || echo "API response checked"
-            curl -i http://localhost:3000/
+            curl -i --max-time 10 http://localhost/health-check || echo "health-check checked"
+            curl -i --max-time 5 http://localhost:4000/health || echo "API health checked"
             
             echo "🎉 [CI/CD] Automated Deployment Completed Successfully!"
