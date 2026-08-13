@@ -2,6 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+RUN apk add --no-cache openssl
+
 COPY package*.json ./
 COPY tsconfig.json ./
 COPY packages/shared/package*.json ./packages/shared/
@@ -20,6 +22,8 @@ RUN npm run build --workspace=@seo-saas/api
 FROM node:20-alpine AS runner
 
 WORKDIR /app
+
+RUN apk add --no-cache openssl ca-certificates libc6-compat
 
 ENV NODE_ENV=production
 
