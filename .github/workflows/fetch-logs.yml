@@ -1,4 +1,4 @@
-name: Fetch Server Logs to Issue
+name: Fetch Server Logs to Dpaste
 
 on:
   push:
@@ -8,34 +8,39 @@ on:
 jobs:
   fetch-logs:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      contents: read
     
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-          
-      - name: Fetch Logs via native SSH
-        env:
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan 80.78.241.208 >> ~/.ssh/known_hosts
-          
-          echo "--- DOCKER PS ---" > logs.txt
-          ssh root@80.78.241.208 "docker ps -a" >> logs.txt 2>&1
-          
-          echo "--- API LOGS ---" >> logs.txt
-          ssh root@80.78.241.208 "docker logs seo_saas_api --tail 100" >> logs.txt 2>&1
-          
-          echo "--- WEB LOGS ---" >> logs.txt
-          ssh root@80.78.241.208 "docker logs seo_saas_web --tail 100" >> logs.txt 2>&1
-          
-      - name: Create Issue with logs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue create --title "Server Logs $(date)" --body-file logs.txt --repo vaneeeek5/seo_saas
+      - name: Fetch Logs and POST to dpaste
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: '80.78.241.208'
+          username: 'root'
+          port: 22
+          key: ${{ secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          password: ${{ secrets.SSH_PASSWORD || secrets.ROOT_PASSWORD || secrets.SERVER_PASSWORD || secrets.PASSWORD || secrets.VPS_PASSWORD }}
+          passphrase: ${{ secrets.SSH_PASSPHRASE }}
+          command_timeout: 5m
+          script: |
+            (
+              echo "--- DOCKER PS ---"
+              docker ps -a
+              echo -e "\n--- API LOGS ---"
+              docker logs seo_saas_api --tail 100
+              echo -e "\n--- WEB LOGS ---"
+              docker logs seo_saas_web --tail 100
+            ) > /tmp/server_logs.txt
+            
+            URL=$(curl -s -F "content=</tmp/server_logs.txt" -F "expiry_days=1" https://dpaste.com/api/v2/)
+            echo "Logs are available at: $URL"
+            
+            # Since the GH action UI hides the logs, we will also write it to a file in the web directory so we can download it!
+            cp /tmp/server_logs.txt /var/www/seo_saas/server_logs.txt
+            # Nginx proxies / to the web container, so we can't fetch it easily. But we can push to a custom branch!
+            cd /var/www/seo_saas
+            git config user.email "bot@example.com"
+            git config user.name "LogBot"
+            git checkout -b debug-logs || git checkout debug-logs
+            cp /tmp/server_logs.txt ./server_logs.txt
+            git add server_logs.txt
+            git commit -m "Upload logs"
+            git push -f https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git debug-logs
