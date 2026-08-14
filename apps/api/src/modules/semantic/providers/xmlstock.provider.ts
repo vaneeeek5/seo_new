@@ -9,72 +9,6 @@ export interface XmlStockConfig {
   googleXmlEnabled?: boolean;
 }
 
-  /**
-   * 5. General Search (SERP Check) Endpoint
-   */
-  async searchSerp(
-    query: string,
-    engine: 'yandex' | 'yandexlive' | 'google',
-    config: XmlStockConfig
-  ): Promise<any[]> {
-    this.logger.log(`[XmlStockProvider] Fetching ${engine} SERP for "${query}"...`);
-
-    if (!config?.userId || !config?.key) {
-      throw new Error("XMLStock API credentials missing");
-    }
-
-    let url = '';
-    // Yandex XML Proxy is format XML only - we must use json proxy if possible, but xmlstock proxy returns XML
-    // Google returns JSON if format is /json/
-    // YandexLive returns JSON if format is /json/
-    if (engine === 'google') {
-      url = `https://xmlstock.com/google/json/?user=${encodeURIComponent(config.userId)}&key=${encodeURIComponent(config.key)}&query=${encodeURIComponent(query)}`;
-    } else if (engine === 'yandexlive') {
-      url = `https://xmlstock.com/yandexlive/json/?user=${encodeURIComponent(config.userId)}&key=${encodeURIComponent(config.key)}&query=${encodeURIComponent(query)}`;
-    } else {
-      // Yandex XML uses proxy that usually returns XML. We will request JSON if possible or fallback.
-      url = `https://xmlstock.com/yandex/xml/?user=${encodeURIComponent(config.userId)}&key=${encodeURIComponent(config.key)}&query=${encodeURIComponent(query)}`;
-    }
-
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`XmlStock API HTTP ${res.status}: ${errText.substring(0, 100)}`);
-    }
-
-    const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('json')) {
-      const data = await res.json();
-      
-      // Parse JSON
-      if (engine === 'google' && data.results) {
-         return data.results.map((r: any, idx: number) => ({ position: idx + 1, title: r.title, url: r.url, query }));
-      }
-      if (engine === 'yandexlive' && data.yandexsearch?.response?.results?.grouping?.group) {
-         const groups = data.yandexsearch.response.results.grouping.group;
-         const arr = Array.isArray(groups) ? groups : [groups];
-         return arr.map((g: any, idx: number) => {
-           const doc = g.doc;
-           return { position: idx + 1, title: doc.title, url: doc.url, query };
-         });
-      }
-      return data;
-    } else {
-      // Parse XML manually (Yandex XML usually returns XML)
-      const xmlText = await res.text();
-      const docs = xmlText.split('<doc>').slice(1);
-      return docs.map((doc, idx) => {
-        const titleMatch = doc.match(/<title>(.*?)</title>/s);
-        const urlMatch = doc.match(/<url>(.*?)</url>/);
-        return {
-          position: idx + 1,
-          query,
-          title: titleMatch ? titleMatch[1].replace(/<[^>]*>?/gm, '') : '',
-          url: urlMatch ? urlMatch[1] : ''
-        };
-      });
-    }
-  }
 
 
 export interface XmlStockWordstatResult {
@@ -275,4 +209,72 @@ export class XmlStockProvider {
       lsiWords: ['suppliers', 'price', 'quality', 'warranty', 'catalog'],
     };
   }
+
+  /**
+   * 5. General Search (SERP Check) Endpoint
+   */
+  async searchSerp(
+    query: string,
+    engine: 'yandex' | 'yandexlive' | 'google',
+    config: XmlStockConfig
+  ): Promise<any[]> {
+    this.logger.log(`[XmlStockProvider] Fetching ${engine} SERP for "${query}"...`);
+
+    if (!config?.userId || !config?.key) {
+      throw new Error("XMLStock API credentials missing");
+    }
+
+    let url = '';
+    // Yandex XML Proxy is format XML only - we must use json proxy if possible, but xmlstock proxy returns XML
+    // Google returns JSON if format is /json/
+    // YandexLive returns JSON if format is /json/
+    if (engine === 'google') {
+      url = `https://xmlstock.com/google/json/?user=${encodeURIComponent(config.userId)}&key=${encodeURIComponent(config.key)}&query=${encodeURIComponent(query)}`;
+    } else if (engine === 'yandexlive') {
+      url = `https://xmlstock.com/yandexlive/json/?user=${encodeURIComponent(config.userId)}&key=${encodeURIComponent(config.key)}&query=${encodeURIComponent(query)}`;
+    } else {
+      // Yandex XML uses proxy that usually returns XML. We will request JSON if possible or fallback.
+      url = `https://xmlstock.com/yandex/xml/?user=${encodeURIComponent(config.userId)}&key=${encodeURIComponent(config.key)}&query=${encodeURIComponent(query)}`;
+    }
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`XmlStock API HTTP ${res.status}: ${errText.substring(0, 100)}`);
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('json')) {
+      const data = await res.json();
+      
+      // Parse JSON
+      if (engine === 'google' && data.results) {
+         return data.results.map((r: any, idx: number) => ({ position: idx + 1, title: r.title, url: r.url, query }));
+      }
+      if (engine === 'yandexlive' && data.yandexsearch?.response?.results?.grouping?.group) {
+         const groups = data.yandexsearch.response.results.grouping.group;
+         const arr = Array.isArray(groups) ? groups : [groups];
+         return arr.map((g: any, idx: number) => {
+           const doc = g.doc;
+           return { position: idx + 1, title: doc.title, url: doc.url, query };
+         });
+      }
+      return data;
+    } else {
+      // Parse XML manually (Yandex XML usually returns XML)
+      const xmlText = await res.text();
+      const docs = xmlText.split('<doc>').slice(1);
+      return docs.map((doc, idx) => {
+        const titleMatch = doc.match(/<title>([\s\S]*?)<\/title>/);
+        const urlMatch = doc.match(/<url>(.*?)<\/url>/);
+        return {
+          position: idx + 1,
+          query,
+          title: titleMatch ? titleMatch[1].replace(/<[^>]*>?/gm, '') : '',
+          url: urlMatch ? urlMatch[1] : ''
+        };
+      });
+    }
+  }
+
 }
