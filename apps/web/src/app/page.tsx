@@ -777,8 +777,7 @@ export default function DashboardPage() {
     
     try {
       const baseUrl = getApiBaseUrl();
-      const userKeywords = seedInput.split(/?
-|,/).map(s => s.trim()).filter(Boolean);
+      const userKeywords = seedInput.split(/[\\r\\n,]+/).map(s => s.trim()).filter(Boolean);
 
       addLog(`[XMLstock] Запрос позиций по ${userKeywords.length} ключам для: ${xmlstockEngines.join(', ')}...`);
 
