@@ -66,7 +66,50 @@ export class SemanticController {
 
   @Post('collect')
   @HttpCode(HttpStatus.OK)
-  async collectSemantics(@Body() dto: CollectSemanticDto) {
+  
+  @Post('xmlstock-search')
+  async collectXmlstockSearch(@Body() dto: { projectId: string; keywords: string[]; engines: string[] }) {
+    try {
+      const { projectId, keywords, engines } = dto;
+      
+      const xmlConn = await this.prisma.integrationConnection.findFirst({
+        where: {
+          provider: 'XMLSTOCK',
+          isActive: true,
+        },
+      });
+
+      if (!xmlConn) {
+        throw new HttpException('Подключение XMLstock не найдено', HttpStatus.BAD_REQUEST);
+      }
+
+      // @ts-ignore
+      const decryptedKey = this.wordstatProvider.encryption.decrypt(xmlConn.encryptedKey, xmlConn.iv, xmlConn.authTag);
+      const config = (xmlConn.config as any) || {};
+      const xmlConfig = { userId: config.userId || '', key: decryptedKey };
+
+      const results: Record<string, any[]> = {};
+
+      for (const engine of engines) {
+        results[engine] = [];
+        for (const kw of keywords) {
+          try {
+            // @ts-ignore
+            const items = await this.wordstatProvider.xmlStockProvider.searchSerp(kw, engine, xmlConfig);
+            results[engine].push(...items);
+          } catch (e: any) {
+            console.error(`XMLStock error for ${engine}/${kw}:`, e.message);
+          }
+        }
+      }
+
+      return { success: true, results };
+    } catch (err: any) {
+      throw new HttpException(err.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+async collectSemantics(@Body() dto: CollectSemanticDto) {
     try {
       const { projectId, seedKeywords, regionId } = dto;
       const projId = projectId || 'proj_demo_1';

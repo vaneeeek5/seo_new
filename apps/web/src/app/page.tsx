@@ -312,6 +312,10 @@ export default function DashboardPage() {
 
   // Semantics State
   const [seedInput, setSeedInput] = useState('');
+  const [xmlstockEngines, setXmlstockEngines] = useState<string[]>(["yandex", "google"]);
+  const [xmlstockResults, setXmlstockResults] = useState<Record<string, any[]> | null>(null);
+  const [xmlstockActiveEngine, setXmlstockActiveEngine] = useState<string>("");
+
   const [isCollecting, setIsCollecting] = useState<boolean>(false);
   const [nicheTopicsInput, setNicheTopicsInput] = useState('');
   const [selectedRegionId, setSelectedRegionId] = useState<number>(225);
@@ -753,7 +757,62 @@ export default function DashboardPage() {
   };
 
   // Instant Clear Semantics Handler
-  const handleClearSemantics = async () => {
+  
+  const handleXmlstockSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!seedInput.trim()) {
+      setToastMessage('⚠️ Введите хотя бы одно ключевое слово.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    if (xmlstockEngines.length === 0) {
+      setToastMessage('⚠️ Выберите хотя бы одну поисковую систему.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    setIsCollecting(true);
+    setXmlstockResults(null);
+    setXmlstockActiveEngine('');
+    
+    try {
+      const baseUrl = getApiBaseUrl();
+      const userKeywords = seedInput.split(/?
+|,/).map(s => s.trim()).filter(Boolean);
+
+      addLog(`[XMLstock] Запрос позиций по ${userKeywords.length} ключам для: ${xmlstockEngines.join(', ')}...`);
+
+      const res = await fetch(`${baseUrl}/semantics/xmlstock-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProjectId, keywords: userKeywords, engines: xmlstockEngines })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      }
+
+      if (data.results && Object.keys(data.results).length > 0) {
+        setXmlstockResults(data.results);
+        const firstEngine = xmlstockEngines.find(e => data.results[e]) || Object.keys(data.results)[0];
+        setXmlstockActiveEngine(firstEngine);
+        setToastMessage(`📊 XMLstock успешно собрал позиции!`);
+        addLog(`[XMLstock API] Успешно получены позиции для ${userKeywords.length} ключей.`);
+      } else {
+        setToastMessage(`⚠️ Позиции не найдены.`);
+      }
+    } catch (err: any) {
+      addLog(`[XMLstock Ошибка] ${err.message}`);
+      setToastMessage(`❌ Ошибка запроса: ${err.message}`);
+      alert(`❌ Ошибка XMLstock:\n${err.message}`);
+    } finally {
+      setIsCollecting(false);
+    }
+  };
+
+const handleClearSemantics = async () => {
     // 1. Instantly clear local keywords list state
     setKeywordsList([]);
     setConfirmClearSemantics(false);
@@ -1639,185 +1698,145 @@ export default function DashboardPage() {
       {/* ВКЛАДКА 2: СЕМАНТИКА (YANDEX WORDSTAT API) */}
       {/* ============================================================ */}
       {activeTab === 'semantics' && (
-        <div style={{ background: '#111827', borderRadius: '16px', padding: '32px', border: '1px solid #1f2937', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}>
+        <div style={{ background: '#111827', borderRadius: '16px', padding: '32px', border: '1px solid #1f2937', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)' }}>
           {/* Header */}
           <div style={{ marginBottom: '28px', borderBottom: '1px solid #1f2937', paddingBottom: '20px' }}>
-            <h2 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span>📊</span> Яндекс Вордстат (Yandex Search API / AI Studio)
+            <h2 style={{ fontSize: '24px', margin: '0 0 8px 0', color: '#34d399', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span>🔍</span> Сбор позиций через XMLstock
             </h2>
             <p style={{ color: '#9ca3af', fontSize: '14px', margin: 0, lineHeight: '1.5' }}>
-              Запрос показов и частотности ключевых фраз через официальный API Яндекс Вордстат (aistudio.yandex.ru).
+              Получение поисковой выдачи (Яндекс / Google) через API <a href="https://xmlstock.com" target="_blank" rel="noopener noreferrer" style={{ color: '#34d399' }}>xmlstock.com</a>. Требуется активный ключ XMLstock в разделе «Подключения».
             </p>
           </div>
 
-          {/* Keyword Input & Action Card */}
-          <form onSubmit={handleCollectSemantics} style={{ background: '#1f2937', padding: '24px', borderRadius: '14px', border: '1px solid #374151', marginBottom: '32px' }}>
-            <div style={{ marginBottom: '20px' }}>
+          {/* Input Form */}
+          <div style={{ background: '#1f2937', padding: '24px', borderRadius: '14px', border: '1px solid #374151', marginBottom: '28px' }}>
+            <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#f0f9ff', marginBottom: '8px' }}>
                 📝 Ключевые слова (через запятую или с новой строки):
               </label>
               <textarea
+                id="xmlstock-keywords-input"
                 rows={5}
-                placeholder={`роботизированная автомойка\nробот мойка купить оборудование, автомойка самообслуживания цена\nмойка машин робот`}
+                placeholder={'купить ноутбук\nлучший смартфон 2024\nавтомойка самообслуживания'}
                 value={seedInput}
                 onChange={(e) => setSeedInput(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  borderRadius: '10px',
-                  border: '1px solid #0284c7',
-                  background: '#0f172a',
-                  color: '#f8fafc',
-                  fontSize: '14px',
-                  fontFamily: 'inherit',
-                  lineHeight: '1.6',
-                  boxSizing: 'border-box',
-                  outline: 'none',
-                  resize: 'vertical',
-                }}
+                style={{ width: '100%', padding: '14px 16px', borderRadius: '10px', border: '1px solid #10b981', background: '#0f172a', color: '#f8fafc', fontSize: '14px', fontFamily: 'inherit', lineHeight: '1.6', boxSizing: 'border-box', outline: 'none', resize: 'vertical' }}
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1', minWidth: '240px' }}>
-                <label style={{ display: 'block', fontSize: '13px', color: '#9ca3af', marginBottom: '6px' }}>
-                  🌍 Регион поиска (Yandex Geo):
-                </label>
-                <select
-                  value={selectedRegionId}
-                  onChange={(e) => setSelectedRegionId(Number(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #374151',
-                    background: '#0f172a',
-                    color: '#f8fafc',
-                    fontSize: '14px',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {REGION_OPTIONS.map(r => (
-                    <option key={r.id} value={r.id}>{r.name} (ID: {r.id})</option>
-                  ))}
-                </select>
+            <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Engine checkboxes */}
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'yandex', label: '🔵 Яндекс XML', color: '#facc15' },
+                  { id: 'google', label: '🔴 Google JSON', color: '#34d399' },
+                  { id: 'yandexlive', label: '🟣 Яндекс Live', color: '#a78bfa' },
+                ].map(eng => (
+                  <label key={eng.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none', padding: '10px 16px', background: xmlstockEngines.includes(eng.id) ? '#0f172a' : '#111827', borderRadius: '8px', border: `1px solid ${xmlstockEngines.includes(eng.id) ? eng.color : '#374151'}`, transition: 'all 0.15s' }}>
+                    <input
+                      type="checkbox"
+                      checked={xmlstockEngines.includes(eng.id)}
+                      onChange={() => setXmlstockEngines(prev => prev.includes(eng.id) ? prev.filter(e => e !== eng.id) : [...prev, eng.id])}
+                      style={{ accentColor: eng.color, width: '16px', height: '16px' }}
+                    />
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: xmlstockEngines.includes(eng.id) ? '#f8fafc' : '#6b7280' }}>{eng.label}</span>
+                  </label>
+                ))}
               </div>
 
+              {/* Run button */}
               <button
-                type="submit"
-                disabled={isCollecting}
-                style={{
-                  padding: '14px 36px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  backgroundColor: isCollecting ? '#475569' : '#0284c7',
-                  color: '#ffffff',
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  cursor: isCollecting ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  boxShadow: isCollecting ? 'none' : '0 4px 14px rgba(2, 132, 199, 0.4)',
-                  transition: 'all 0.2s ease',
-                }}
+                id="xmlstock-run-button"
+                type="button"
+                disabled={isCollecting || xmlstockEngines.length === 0}
+                onClick={handleXmlstockSearch}
+                style={{ padding: '14px 36px', borderRadius: '10px', border: 'none', backgroundColor: isCollecting ? '#374151' : '#10b981', color: '#ffffff', fontSize: '15px', fontWeight: 700, cursor: isCollecting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: isCollecting ? 'none' : '0 4px 14px rgba(16,185,129,0.35)', transition: 'all 0.2s ease', marginLeft: 'auto' }}
               >
-                {isCollecting ? (
-                  <>⏳ Идёт сбор частотности...</>
-                ) : (
-                  <>🚀 Запуск</>
-                )}
+                {isCollecting ? '⏳ Запрос...' : '🚀 Запустить'}
               </button>
             </div>
-          </form>
+          </div>
 
-          {/* Results Display */}
-          {keywordsList.length > 0 ? (
+          {/* Results */}
+          {xmlstockResults && Object.keys(xmlstockResults).length > 0 && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ fontSize: '16px', color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>📋</span> Частотность из Яндекс Вордстат ({keywordsList.length} фраз):
-                </h3>
+              {/* Engine tab switcher */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid #1f2937', paddingBottom: '0' }}>
+                {Object.keys(xmlstockResults).map(eng => {
+                  const engineLabels: Record<string, string> = { yandex: '🔵 Яндекс', google: '🔴 Google', yandexlive: '🟣 Яндекс Live' };
+                  const isActive = xmlstockActiveEngine === eng;
+                  return (
+                    <button
+                      key={eng}
+                      onClick={() => setXmlstockActiveEngine(eng)}
+                      style={{ padding: '10px 22px', border: 'none', borderRadius: '8px 8px 0 0', background: isActive ? '#1f2937' : 'transparent', color: isActive ? '#34d399' : '#6b7280', fontSize: '14px', fontWeight: isActive ? 700 : 500, cursor: 'pointer', borderBottom: isActive ? '2px solid #10b981' : '2px solid transparent', transition: 'all 0.15s' }}
+                    >
+                      {engineLabels[eng] || eng} <span style={{ fontSize: '11px', opacity: 0.7 }}>({xmlstockResults[eng]?.length || 0} рез.)</span>
+                    </button>
+                  );
+                })}
                 <button
-                  type="button"
-                  onClick={handleClearSemantics}
-                  style={{
-                    padding: '6px 14px',
-                    background: '#7f1d1d',
-                    color: '#fca5a5',
-                    border: '1px solid #991b1b',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
+                  onClick={() => { setXmlstockResults(null); setXmlstockActiveEngine(''); }}
+                  style={{ marginLeft: 'auto', padding: '8px 14px', background: '#7f1d1d', color: '#fca5a5', border: '1px solid #991b1b', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
                 >
-                  🗑️ Очистить результаты
+                  🗑️ Очистить
                 </button>
               </div>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', background: '#1f2937', borderRadius: '10px', overflow: 'hidden' }}>
-                  <thead>
-                    <tr style={{ background: '#0f172a', color: '#9ca3af', textAlign: 'left', fontSize: '13px', borderBottom: '1px solid #374151' }}>
-                      <th style={{ padding: '14px 16px', width: '50px' }}>№</th>
-                      <th style={{ padding: '14px 16px' }}>Ключевая фраза</th>
-                      <th style={{ padding: '14px 16px' }}>Частотность (показов/мес в Яндекс)</th>
-                      <th style={{ padding: '14px 16px', textAlign: 'right' }}>Действия</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {keywordsList.map((kw, idx) => {
-                      const maxVol = Math.max(...keywordsList.map(k => k.vol), 100);
-                      const volPct = Math.min(100, Math.max(4, Math.round((kw.vol / maxVol) * 100)));
-
-                      return (
-                        <tr key={kw.id || idx} style={{ borderBottom: '1px solid #374151', color: '#f8fafc', fontSize: '14px' }}>
-                          <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '13px' }}>{idx + 1}</td>
-                          <td style={{ padding: '14px 16px', fontWeight: 600, color: '#e0f2fe' }}>{kw.term}</td>
-                          <td style={{ padding: '14px 16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <span style={{ fontWeight: 700, color: '#38bdf8', minWidth: '70px', fontSize: '15px' }}>
-                                {kw.vol ? kw.vol.toLocaleString('ru-RU') : 0}
-                              </span>
-                              <div style={{ flex: 1, background: '#0f172a', height: '8px', borderRadius: '4px', overflow: 'hidden', maxWidth: '160px' }}>
-                                <div style={{ width: `${volPct}%`, background: 'linear-gradient(90deg, #0284c7, #38bdf8)', height: '100%', borderRadius: '4px' }} />
-                              </div>
-                            </div>
+              {/* Active engine table */}
+              {xmlstockActiveEngine && xmlstockResults[xmlstockActiveEngine] && (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', background: '#1f2937', borderRadius: '10px', overflow: 'hidden', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: '#0f172a', color: '#9ca3af', textAlign: 'left', borderBottom: '1px solid #374151' }}>
+                        <th style={{ padding: '12px 14px', width: '40px' }}>№</th>
+                        <th style={{ padding: '12px 14px', width: '50px' }}>Поз.</th>
+                        <th style={{ padding: '12px 14px' }}>Ключевой запрос</th>
+                        <th style={{ padding: '12px 14px' }}>Заголовок</th>
+                        <th style={{ padding: '12px 14px' }}>URL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {xmlstockResults[xmlstockActiveEngine].map((row: any, idx: number) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #374151', color: '#f8fafc' }}>
+                          <td style={{ padding: '12px 14px', color: '#64748b' }}>{idx + 1}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={{ display: 'inline-block', minWidth: '32px', padding: '3px 8px', borderRadius: '4px', background: row.position <= 3 ? '#14532d' : row.position <= 10 ? '#1e3a5f' : '#1f2937', color: row.position <= 3 ? '#4ade80' : row.position <= 10 ? '#60a5fa' : '#94a3b8', fontWeight: 700, textAlign: 'center' }}>
+                              {row.position}
+                            </span>
                           </td>
-                          <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                            <button
-                              onClick={() => handleRemoveKeyword(kw.id)}
-                              style={{
-                                padding: '6px 12px',
-                                borderRadius: '6px',
-                                border: '1px solid #475569',
-                                background: '#0f172a',
-                                color: '#94a3b8',
-                                fontSize: '12px',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              🗑️ Удалить
-                            </button>
+                          <td style={{ padding: '12px 14px', color: '#a5f3fc', fontWeight: 600 }}>{row.query}</td>
+                          <td style={{ padding: '12px 14px', color: '#e2e8f0', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.title || '—'}</td>
+                          <td style={{ padding: '12px 14px', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <a href={row.url} target="_blank" rel="noopener noreferrer" style={{ color: '#34d399', textDecoration: 'none', fontSize: '12px' }}>
+                              {row.url ? new URL(row.url).hostname : '—'}
+                            </a>
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          ) : (
+          )}
+
+          {/* Empty state */}
+          {(!xmlstockResults || Object.keys(xmlstockResults).length === 0) && (
             <div style={{ textAlign: 'center', padding: '48px 24px', background: '#1f2937', borderRadius: '14px', border: '1px dashed #374151', color: '#64748b' }}>
-              <div style={{ fontSize: '36px', marginBottom: '12px' }}>📊</div>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
               <p style={{ fontSize: '14px', margin: 0, color: '#94a3b8' }}>
-                Введите ключевые слова выше и нажмите <strong>«🚀 Запуск»</strong> для получения частотности из Yandex Wordstat API.
+                Введите ключевые слова, выберите поисковики и нажмите <strong>«🚀 Запустить»</strong>.
+              </p>
+              <p style={{ fontSize: '12px', margin: '8px 0 0', color: '#4b5563' }}>
+                Результаты выдачи будут отображены по каждому поисковику в отдельной таблице.
               </p>
             </div>
           )}
         </div>
       )}
+
 
       {/* ============================================================ */}
       {/* ВКЛАДКА 3 & 4: ГЕНЕРАЦИЯ СТАТЕЙ, РЕДАКТОР И СЕО-ПАНЕЛЬ */}
