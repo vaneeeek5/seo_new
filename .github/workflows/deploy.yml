@@ -62,12 +62,15 @@ jobs:
             echo "🐳 Stopping existing containers..."
             docker compose down --remove-orphans || true
             
-            echo "🐳 Building all images first (no start)..."
-            docker compose build --parallel
+            echo "🐳 Building images one at a time (low RAM mode)..."
+            docker compose build api
+            docker compose build web
             
             echo "🐳 Starting databases (postgres + redis)..."
             docker compose up -d postgres redis
-            sleep 8
+            
+            echo "⏳ Waiting 20s for postgres to be ready..."
+            sleep 20
             
             echo "🐳 Starting API container..."
             docker compose up -d api
@@ -88,7 +91,7 @@ jobs:
             
             echo "🐳 Starting Web container..."
             docker compose up -d web
-            sleep 8
+            sleep 15
             
             echo "🐳 Starting Nginx (last, after backends are ready)..."
             docker compose up -d nginx
