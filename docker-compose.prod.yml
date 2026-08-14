@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: seo_saas_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: seo_saas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seo_saas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: seo_saas_redis
+    volumes:
+      - redis_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY,,}-api:latest
+    container_name: seo_saas_api
+    environment:
+      DATABASE_URL: 'postgresql://postgres:postgrespassword@postgres:5432/seo_saas?schema=public'
+      REDIS_HOST: 'redis'
+      REDIS_PORT: '6379'
+      PORT: '4000'
+      NODE_ENV: 'production'
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
+  web:
+    image: ghcr.io/${GITHUB_REPOSITORY,,}-web:latest
+    container_name: seo_saas_web
+    environment:
+      PORT: '3000'
+      INTERNAL_API_URL: 'http://api:4000'
+      NEXT_PUBLIC_API_URL: 'http://80.78.241.208/api'
+    ports:
+      - '3000:3000'
+    depends_on:
+      - api
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: seo_saas_nginx
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - web
+      - api
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:

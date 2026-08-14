@@ -6,30 +6,63 @@ on:
       - main
       - production
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+env:
+  REGISTRY: ghcr.io
 
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Generate Prisma Client & Build Monorepo
+      - name: Set lower case repository name
         run: |
-          npx prisma generate --schema=apps/api/prisma/schema.prisma
-          npm run build
+          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
-      - name: Deploy via SSH (Key / Password)
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_LC }}-api:latest
+
+      - name: Build and push Web
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPO_LC }}-web:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Set lower case repository name
+        run: |
+          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          CR_PAT: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY: ghcr.io
+          ACTOR: ${{ github.actor }}
+          REPO_LC: ${{ env.REPO_LC }}
         with:
           host: '80.78.241.208'
           username: 'root'
@@ -38,6 +71,7 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD || secrets.ROOT_PASSWORD || secrets.SERVER_PASSWORD || secrets.PASSWORD || secrets.VPS_PASSWORD }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           command_timeout: 30m
+          envs: CR_PAT,REGISTRY,ACTOR,REPO_LC
           script: |
             export DEBIAN_FRONTEND=noninteractive
             echo "🚀 [CI/CD] Connected to server 80.78.241.208 successfully!"
@@ -46,7 +80,7 @@ jobs:
             mkdir -p $TARGET_DIR
             cd $TARGET_DIR
             
-            # Sync repository
+            # Sync repository to get latest docker-compose.prod.yml
             if [ -d ".git" ]; then
               echo "📥 Pulling latest commits from GitHub main..."
               git fetch --all
@@ -59,54 +93,38 @@ jobs:
             chmod +x scripts/setup-server.sh
             ./scripts/setup-server.sh
             
-            echo "🐳 Stopping existing containers..."
-            docker compose down --remove-orphans || true
+            echo "🔑 Logging into GHCR on server..."
+            echo $CR_PAT | docker login $REGISTRY -u $ACTOR --password-stdin
             
-            echo "🐳 Building images one at a time (low RAM mode)..."
-            docker compose build api
-            docker compose build web
+            echo "📥 Pulling latest images from GHCR..."
+            # Create a localized copy of compose file with resolved env variables if needed, 
+            # but since REPO_LC is available, we can just export it.
+            export GITHUB_REPOSITORY_LC=$REPO_LC
             
-            echo "🐳 Starting databases (postgres + redis)..."
-            docker compose up -d postgres redis
+            # We must dynamically replace ${GITHUB_REPOSITORY,,} inside docker-compose.prod.yml 
+            # because standard docker-compose doesn't support bash string manipulation like ,,
+            sed -i "s|\${GITHUB_REPOSITORY,,}|$REPO_LC|g" docker-compose.prod.yml
             
-            echo "⏳ Waiting 20s for postgres to be ready..."
-            sleep 20
+            docker compose -f docker-compose.prod.yml pull
             
-            echo "🐳 Starting API container..."
-            docker compose up -d api
+            echo "🐳 Starting updated containers..."
+            docker compose -f docker-compose.prod.yml up -d
             
             echo "⏳ Waiting for API to be healthy on port 4000..."
-            for i in $(seq 1 40); do
+            for i in $(seq 1 20); do
               if curl -s --max-time 3 http://localhost:4000/health > /dev/null 2>&1 || \
                  curl -s --max-time 3 http://localhost:4000/semantics/wordstat-status > /dev/null 2>&1; then
                 echo "✅ API is responding on port 4000!"
                 break
               fi
-              echo "  Attempt $i/40 - waiting for API..."
-              if [ $((i % 10)) -eq 0 ]; then
-                docker compose logs api --tail 20
-              fi
+              echo "  Attempt $i/20 - waiting for API..."
               sleep 3
             done
             
-            echo "🐳 Starting Web container..."
-            docker compose up -d web
-            sleep 15
-            
-            echo "🐳 Starting Nginx (last, after backends are ready)..."
-            docker compose up -d nginx
-            
             echo "🔍 Syncing PostgreSQL Prisma schema..."
-            docker compose exec -T api npx prisma db push --schema=apps/api/prisma/schema.prisma --accept-data-loss || true
+            docker compose -f docker-compose.prod.yml exec -T api npx prisma db push --schema=apps/api/prisma/schema.prisma --accept-data-loss || true
             
             echo "📊 Docker Container Status:"
-            docker compose ps
+            docker compose -f docker-compose.prod.yml ps
             
-            echo "📝 Final API Container Logs (Last 40 lines):"
-            docker compose logs api --tail 40
-            
-            echo "🧪 Verifying Server Response:"
-            curl -i --max-time 10 http://localhost/health-check || echo "health-check checked"
-            curl -i --max-time 5 http://localhost:4000/health || echo "API health checked"
-            
-            echo "🎉 [CI/CD] Automated Deployment Completed Successfully!"
+            echo "🎉 [CI/CD] Automated Deployment from GHCR Completed Successfully!"
