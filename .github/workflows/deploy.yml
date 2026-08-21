@@ -20,7 +20,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
           password: ${{ secrets.SSH_PASSWORD || secrets.ROOT_PASSWORD || secrets.SERVER_PASSWORD || secrets.PASSWORD || secrets.VPS_PASSWORD }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
-          command_timeout: 30m
+          command_timeout: 10m
           script: |
             export DEBIAN_FRONTEND=noninteractive
             echo "🚀 [CI/CD] Connected to server 80.78.241.208 successfully!"
@@ -55,12 +55,26 @@ jobs:
             echo "🐳 Ensuring Database and Redis are running..."
             docker-compose up -d || docker compose up -d
             
-            echo "🔄 Restarting API server..."
-            # Find and kill existing uvicorn process
-            pkill -f "uvicorn app.main:app" || true
+            echo "⚙️ Configuring systemd service..."
+            cat << 'EOF' > /etc/systemd/system/autoseo.service
+            [Unit]
+            Description=AutoSEO FastAPI Backend
+            After=network.target
             
-            # Start in background
-            nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+            [Service]
+            User=root
+            WorkingDirectory=/var/www/seo_saas/auto-seo-main
+            Environment="PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            ExecStart=/root/.cargo/bin/uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+            Restart=always
             
-            echo "✅ API server started on port 8000!"
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+            
+            systemctl daemon-reload
+            systemctl enable autoseo
+            systemctl restart autoseo
+            
+            echo "✅ API server started on port 8000 via systemd!"
             echo "🎉 [CI/CD] Automated Deployment Completed Successfully!"
