@@ -1,6 +1,7 @@
-name: Fetch Server Logs to Dpaste
+name: Fetch Server Logs
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -8,9 +9,9 @@ on:
 jobs:
   fetch-logs:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Fetch Logs and POST to dpaste
+      - name: Fetch Logs via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: '80.78.241.208'
@@ -21,26 +22,24 @@ jobs:
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           command_timeout: 5m
           script: |
-            (
-              echo "--- DOCKER PS ---"
-              docker ps -a
-              echo -e "\n--- API LOGS ---"
-              docker logs seo_saas_api --tail 100
-              echo -e "\n--- WEB LOGS ---"
-              docker logs seo_saas_web --tail 100
-            ) > /tmp/server_logs.txt
-            
-            URL=$(curl -s -F "content=</tmp/server_logs.txt" -F "expiry_days=1" https://dpaste.com/api/v2/)
-            echo "Logs are available at: $URL"
-            
-            # Since the GH action UI hides the logs, we will also write it to a file in the web directory so we can download it!
-            cp /tmp/server_logs.txt /var/www/seo_saas/server_logs.txt
-            # Nginx proxies / to the web container, so we can't fetch it easily. But we can push to a custom branch!
-            cd /var/www/seo_saas
-            git config user.email "bot@example.com"
-            git config user.name "LogBot"
-            git checkout -b debug-logs || git checkout debug-logs
-            cp /tmp/server_logs.txt ./server_logs.txt
-            git add server_logs.txt
-            git commit -m "Upload logs"
-            git push -f https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git debug-logs
+            echo "========== DOCKER PS =========="
+            docker ps -a
+
+            echo ""
+            echo "========== API LOGS (last 150 lines) =========="
+            docker logs seo_saas_api --tail 150 2>&1 || docker logs $(docker ps -aq -f name=api) --tail 150 2>&1 || echo "Cannot find API container"
+
+            echo ""
+            echo "========== API LOGS (all containers matching 'api') =========="
+            for cid in $(docker ps -aq --filter "name=api"); do
+              echo "--- Container: $cid ---"
+              docker logs $cid --tail 50 2>&1
+            done
+
+            echo ""
+            echo "========== DOCKER COMPOSE PS =========="
+            cd /var/www/seo_saas && docker compose -f docker-compose.prod.yml ps 2>&1 || true
+
+            echo ""
+            echo "========== ENV CHECK =========="
+            cd /var/www/seo_saas && cat .env 2>/dev/null | grep -v KEY | grep -v PASSWORD | grep -v SECRET || echo "No .env file"
