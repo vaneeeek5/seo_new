@@ -1,0 +1,882 @@
+{
+  "brand_name": "Notion",
+  "query": "What are the best note-taking apps?",
+  "queries": [
+    "What are the best note-taking apps?",
+    "Notion vs Obsidian: which is better?"
+  ],
+  "model_used": "gemini-3-flash-preview",
+  "platform_analyses": [
+    {
+      "brand_mentioned": true,
+      "mention_context": "recommended",
+      "brand_position": 4,
+      "sentiment": {
+        "overall": "positive",
+        "reasoning": "Notion is described as excelling in its category with 'best-in-class' features for collaboration, though it is noted as potentially too feature-heavy for individual users.",
+        "aspects": [
+          {
+            "feature": "collaboration",
+            "sentiment": "positive",
+            "detail": "excels at team note-taking with best-in-class collaboration features"
+          },
+          {
+            "feature": "task management",
+            "sentiment": "positive",
+            "detail": "highlighted as a built-in feature"
+          },
+          {
+            "feature": "databases",
+            "sentiment": "positive",
+            "detail": "highlighted as a built-in feature"
+          },
+          {
+            "feature": "personal use",
+            "sentiment": "negative",
+            "detail": "it can be feature-heavy for personal use"
+          }
+        ]
+      },
+      "keywords_found": [
+        "Notion",
+        "Obsidian",
+        "Microsoft OneNote",
+        "Apple Notes",
+        "Google Keep",
+        "Notability",
+        "Bear",
+        "Hive Notes",
+        "RemNote",
+        "Joplin",
+        "Evernote"
+      ],
+      "competitors": [
+        {
+          "name": "Microsoft OneNote",
+          "recommended": true,
+          "position": 1
+        },
+        {
+          "name": "Apple Notes",
+          "recommended": true,
+          "position": 2
+        },
+        {
+          "name": "Google Keep",
+          "recommended": true,
+          "position": 3
+        },
+        {
+          "name": "Obsidian",
+          "recommended": true,
+          "position": 5
+        },
+        {
+          "name": "Notability",
+          "recommended": true,
+          "position": 6
+        },
+        {
+          "name": "Bear",
+          "recommended": true,
+          "position": 7
+        },
+        {
+          "name": "Hive Notes",
+          "recommended": true,
+          "position": 8
+        },
+        {
+          "name": "RemNote",
+          "recommended": true,
+          "position": 9
+        },
+        {
+          "name": "Joplin",
+          "recommended": true,
+          "position": 10
+        },
+        {
+          "name": "Evernote",
+          "recommended": false,
+          "position": null
+        }
+      ],
+      "relevant_quotes": [
+        "For collaboration: Notion excels at team note-taking with best-in-class collaboration features, task management, and databases, though it can be feature-heavy for personal use[1]."
+      ],
+      "platform": "perplexity"
+    },
+    {
+      "brand_mentioned": true,
+      "mention_context": "recommended",
+      "brand_position": 1,
+      "sentiment": {
+        "overall": "positive",
+        "reasoning": "Notion is designated as the 'gold standard' and the first recommended app, with significant praise for its AI capabilities and versatility.",
+        "aspects": [
+          {
+            "feature": "productivity suite",
+            "sentiment": "positive",
+            "detail": "Described as the gold standard for combining notes, tasks, and databases."
+          },
+          {
+            "feature": "Notion AI",
+            "sentiment": "positive",
+            "detail": "Can draft documents, summarize databases, and automate workflows."
+          },
+          {
+            "feature": "collaboration",
+            "sentiment": "positive",
+            "detail": "Identified as a top-tier choice for project management and team collaboration."
+          },
+          {
+            "feature": "organization",
+            "sentiment": "positive",
+            "detail": "Uses a structured, block-based system."
+          }
+        ]
+      },
+      "keywords_found": [
+        "Notion",
+        "Obsidian",
+        "Goodnotes 6",
+        "Notability",
+        "Otter.ai",
+        "Fireflies.ai",
+        "Apple Notes",
+        "Microsoft OneNote",
+        "Freeform",
+        "Milanote",
+        "Google Keep",
+        "Bear",
+        "Craft",
+        "Joplin"
+      ],
+      "competitors": [
+        {
+          "name": "Goodnotes 6",
+          "recommended": true,
+          "position": 2
+        },
+        {
+          "name": "Notability",
+          "recommended": true,
+          "position": 2
+        },
+        {
+          "name": "Obsidian",
+          "recommended": true,
+          "position": 3
+        },
+        {
+          "name": "Otter.ai",
+          "recommended": true,
+          "position": 4
+        },
+        {
+          "name": "Fireflies.ai",
+          "recommended": true,
+          "position": 4
+        },
+        {
+          "name": "Apple Notes",
+          "recommended": true,
+          "position": 5
+        },
+        {
+          "name": "Microsoft OneNote",
+          "recommended": true,
+          "position": 5
+        },
+        {
+          "name": "Freeform",
+          "recommended": true,
+          "position": 6
+        },
+        {
+          "name": "Milanote",
+          "recommended": true,
+          "position": 6
+        }
+      ],
+      "relevant_quotes": [
+        "Best for All-in-One Productivity: Notion",
+        "Notion remains the gold standard for users who want to combine notes, tasks, and databases in one place.",
+        "Its \"Notion AI\" can now draft documents, summarize entire databases, and even automate workflows based on your notes.",
+        "Best for: Project management, team collaboration, and users who like a structured, block-based system."
+      ],
+      "platform": "gemini"
+    },
+    {
+      "brand_mentioned": true,
+      "mention_context": "compared",
+      "brand_position": 1,
+      "sentiment": {
+        "overall": "positive",
+        "reasoning": "The response highlights Notion as a powerful tool for teams and project management, noting its user-friendliness and polish despite its lack of native offline access.",
+        "aspects": [
+          {
+            "feature": "collaboration",
+            "sentiment": "positive",
+            "detail": "Real-time editing, @mentions, comments, and sharing are built-in features."
+          },
+          {
+            "feature": "offline access",
+            "sentiment": "negative",
+            "detail": "Cloud-based; lags without internet and lacks native offline functionality."
+          },
+          {
+            "feature": "ease of use",
+            "sentiment": "positive",
+            "detail": "Described as user-friendly with a lower learning curve compared to Obsidian."
+          },
+          {
+            "feature": "project management",
+            "sentiment": "positive",
+            "detail": "Excels in databases, tasks, and workflows for teams."
+          },
+          {
+            "feature": "privacy",
+            "sentiment": "neutral",
+            "detail": "Uses encrypted cloud storage but the vendor has access to data."
+          }
+        ]
+      },
+      "keywords_found": [
+        "Notion",
+        "Obsidian"
+      ],
+      "competitors": [
+        {
+          "name": "Obsidian",
+          "recommended": true,
+          "position": 2
+        }
+      ],
+      "relevant_quotes": [
+        "Notion excels in team collaboration, project management, and structured databases",
+        "Notion: User-friendly, lower learning curve",
+        "Opt for Notion if you need collaboration and structure",
+        "Notion feels more polished for beginners",
+        "Cloud-based; lags without internet, no native offline"
+      ],
+      "platform": "perplexity"
+    },
+    {
+      "brand_mentioned": true,
+      "mention_context": "compared",
+      "brand_position": 1,
+      "sentiment": {
+        "overall": "positive",
+        "reasoning": "Notion is described as the 'gold standard' for databases and collaboration, though it is critiqued for its limited offline capabilities compared to Obsidian.",
+        "aspects": [
+          {
+            "feature": "Databases",
+            "sentiment": "positive",
+            "detail": "Remains the gold standard for structured data with new visual dashboards."
+          },
+          {
+            "feature": "Collaboration",
+            "sentiment": "positive",
+            "detail": "Described as the only choice for simultaneous team editing and task assignment."
+          },
+          {
+            "feature": "AI Integration",
+            "sentiment": "positive",
+            "detail": "The Notion Agent is noted for being highly polished and deeply integrated."
+          },
+          {
+            "feature": "Ease of Use",
+            "sentiment": "positive",
+            "detail": "Intuitive Lego-block system for visual thinkers with zero setup time."
+          },
+          {
+            "feature": "Offline Access",
+            "sentiment": "negative",
+            "detail": "Still struggles with true offline workflows compared to local-first competitors."
+          }
+        ]
+      },
+      "keywords_found": [
+        "Notion",
+        "Obsidian",
+        "Bases",
+        "Notion Agent",
+        "Ollama",
+        "Zapier",
+        "Make",
+        "Smart Connections"
+      ],
+      "competitors": [
+        {
+          "name": "Obsidian",
+          "recommended": true,
+          "position": 2
+        }
+      ],
+      "relevant_quotes": [
+        "Notion remains the gold standard for structured data.",
+        "If you need to @mention someone, assign a task, or edit a document simultaneously with five people, Notion is the only choice.",
+        "The native AI is highly polished.",
+        "Notion still struggles with true offline workflows.",
+        "Use Notion if you are managing a business, coordinating with others, or want a \"beautiful\" system with zero setup time."
+      ],
+      "platform": "gemini"
+    }
+  ],
+  "aggregate": {
+    "platforms_mentioning_brand": 4,
+    "total_platforms": 4,
+    "overall_sentiment": "positive",
+    "avg_brand_position": 1.8,
+    "top_competitors": [
+      "Obsidian",
+      "Microsoft OneNote",
+      "Apple Notes",
+      "Notability",
+      "Google Keep",
+      "Bear",
+      "Hive Notes",
+      "RemNote",
+      "Joplin",
+      "Evernote",
+      "Goodnotes 6",
+      "Otter.ai",
+      "Fireflies.ai",
+      "Freeform",
+      "Milanote"
+    ],
+    "brand_recommended_on": [
+      "perplexity",
+      "gemini"
+    ],
+    "all_keywords_found": [
+      "Notion",
+      "Obsidian",
+      "Microsoft OneNote",
+      "Apple Notes",
+      "Google Keep",
+      "Notability",
+      "Bear",
+      "Hive Notes",
+      "RemNote",
+      "Joplin",
+      "Evernote",
+      "Goodnotes 6",
+      "Otter.ai",
+      "Fireflies.ai",
+      "Freeform",
+      "Milanote",
+      "Craft",
+      "Bases",
+      "Notion Agent",
+      "Ollama",
+      "Zapier",
+      "Make",
+      "Smart Connections"
+    ],
+    "common_strengths": [
+      "collaboration",
+      "databases",
+      "ease of use"
+    ],
+    "common_weaknesses": [
+      "offline access"
+    ]
+  },
+  "scores": {
+    "visibility_score": 100.0,
+    "share_of_voice": 16.0,
+    "sentiment_score": 100.0,
+    "position_score": 92.5,
+    "overall_score": 73.3
+  },
+  "competitor_rankings": [
+    {
+      "name": "Notion",
+      "visibility_score": 100.0,
+      "share_of_voice": 16.0,
+      "sentiment_score": 100.0,
+      "position_score": 92.5,
+      "overall_score": 73.3,
+      "mention_count": 4,
+      "avg_position": 1.8,
+      "is_own": true
+    },
+    {
+      "name": "Obsidian",
+      "visibility_score": 100.0,
+      "share_of_voice": 16.0,
+      "sentiment_score": 100.0,
+      "position_score": 80.0,
+      "overall_score": 70.8,
+      "mention_count": 4,
+      "avg_position": 3.0,
+      "is_own": false
+    },
+    {
+      "name": "Microsoft OneNote",
+      "visibility_score": 50.0,
+      "share_of_voice": 8.0,
+      "sentiment_score": 100.0,
+      "position_score": 80.0,
+      "overall_score": 53.4,
+      "mention_count": 2,
+      "avg_position": 3.0,
+      "is_own": false
+    },
+    {
+      "name": "Apple Notes",
+      "visibility_score": 50.0,
+      "share_of_voice": 8.0,
+      "sentiment_score": 100.0,
+      "position_score": 75.0,
+      "overall_score": 52.4,
+      "mention_count": 2,
+      "avg_position": 3.5,
+      "is_own": false
+    },
+    {
+      "name": "Notability",
+      "visibility_score": 50.0,
+      "share_of_voice": 8.0,
+      "sentiment_score": 100.0,
+      "position_score": 70.0,
+      "overall_score": 51.4,
+      "mention_count": 2,
+      "avg_position": 4.0,
+      "is_own": false
+    },
+    {
+      "name": "Goodnotes 6",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 90.0,
+      "overall_score": 46.7,
+      "mention_count": 1,
+      "avg_position": 2.0,
+      "is_own": false
+    },
+    {
+      "name": "Google Keep",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 80.0,
+      "overall_score": 44.7,
+      "mention_count": 1,
+      "avg_position": 3.0,
+      "is_own": false
+    },
+    {
+      "name": "Otter.ai",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 70.0,
+      "overall_score": 42.7,
+      "mention_count": 1,
+      "avg_position": 4.0,
+      "is_own": false
+    },
+    {
+      "name": "Fireflies.ai",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 70.0,
+      "overall_score": 42.7,
+      "mention_count": 1,
+      "avg_position": 4.0,
+      "is_own": false
+    },
+    {
+      "name": "Freeform",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 50.0,
+      "overall_score": 38.7,
+      "mention_count": 1,
+      "avg_position": 6.0,
+      "is_own": false
+    },
+    {
+      "name": "Milanote",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 50.0,
+      "overall_score": 38.7,
+      "mention_count": 1,
+      "avg_position": 6.0,
+      "is_own": false
+    },
+    {
+      "name": "Bear",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 40.0,
+      "overall_score": 36.7,
+      "mention_count": 1,
+      "avg_position": 7.0,
+      "is_own": false
+    },
+    {
+      "name": "Hive Notes",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 30.0,
+      "overall_score": 34.7,
+      "mention_count": 1,
+      "avg_position": 8.0,
+      "is_own": false
+    },
+    {
+      "name": "RemNote",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 20.0,
+      "overall_score": 32.7,
+      "mention_count": 1,
+      "avg_position": 9.0,
+      "is_own": false
+    },
+    {
+      "name": "Joplin",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 100.0,
+      "position_score": 10.0,
+      "overall_score": 30.7,
+      "mention_count": 1,
+      "avg_position": 10.0,
+      "is_own": false
+    },
+    {
+      "name": "Evernote",
+      "visibility_score": 25.0,
+      "share_of_voice": 4.0,
+      "sentiment_score": 50.0,
+      "position_score": 0.0,
+      "overall_score": 18.7,
+      "mention_count": 1,
+      "avg_position": null,
+      "is_own": false
+    }
+  ],
+  "provider_comparison": [
+    {
+      "competitor_name": "Notion",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 1,
+          "sentiment": "positive",
+          "visibility_score": 100.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 2,
+          "sentiment": "positive",
+          "visibility_score": 100.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Apple Notes",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 5,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 2,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Bear",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 7,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Evernote",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Fireflies.ai",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 4,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Freeform",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 6,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Goodnotes 6",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 2,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Google Keep",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 3,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Hive Notes",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 8,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Joplin",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 10,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Microsoft OneNote",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 5,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 1,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Milanote",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 6,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Notability",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 2,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 6,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Obsidian",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 2,
+          "sentiment": "positive",
+          "visibility_score": 100.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 4,
+          "sentiment": "positive",
+          "visibility_score": 100.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "Otter.ai",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": true,
+          "position": 4,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        }
+      ]
+    },
+    {
+      "competitor_name": "RemNote",
+      "providers": [
+        {
+          "provider": "gemini",
+          "brand_mentioned": false,
+          "position": null,
+          "sentiment": "neutral",
+          "visibility_score": 0.0
+        },
+        {
+          "provider": "perplexity",
+          "brand_mentioned": true,
+          "position": 9,
+          "sentiment": "positive",
+          "visibility_score": 50.0
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "elapsed_seconds": 75.33
+  }
+}

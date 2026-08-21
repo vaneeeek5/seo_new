@@ -1,0 +1,90 @@
+{
+  "query": "best CRM for startups",
+  "model": "gemini-3-flash-preview",
+  "count": 12,
+  "types": {
+    "comparative": 2,
+    "definitional": 2,
+    "feature_specific": 2,
+    "how_to": 2,
+    "trust_signals": 2,
+    "use_case": 2
+  },
+  "sub_queries": [
+    {
+      "type": "comparative",
+      "query": "comparison of HubSpot vs Salesforce for pre-seed startups",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "comparative",
+      "query": "Pipedrive vs Zoho CRM price comparison for small teams",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "feature_specific",
+      "query": "startup CRM with automated email sequences and tracking",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "feature_specific",
+      "query": "CRM software with built-in investor relationship management",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "use_case",
+      "query": "best CRM for B2B SaaS startups with long sales cycles",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "use_case",
+      "query": "using a CRM to manage early-stage startup partnership outreach",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "trust_signals",
+      "query": "best startup CRM according to Reddit and Y Combinator founders",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "trust_signals",
+      "query": "real-world CRM implementation case studies for tech startups",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "how_to",
+      "query": "how to transition from Excel to a CRM for a startup",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "how_to",
+      "query": "how to choose a CRM that scales with a startup's growth",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "definitional",
+      "query": "what defines a startup-friendly CRM vs enterprise CRM",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "definitional",
+      "query": "core CRM requirements for a company in the seed stage",
+      "covered": null,
+      "similarity_score": null
+    }
+  ],
+  "_meta": {
+    "elapsed_seconds": 10.52
+  }
+}

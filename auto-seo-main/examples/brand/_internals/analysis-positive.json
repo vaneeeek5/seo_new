@@ -1,0 +1,61 @@
+{
+  "analysis": {
+    "brand_mentioned": true,
+    "mention_context": "recommended",
+    "brand_position": 1,
+    "sentiment": {
+      "overall": "positive",
+      "reasoning": "Notion is listed as the first recommendation and described as the best 'all-in-one workspace' with praise for its versatility and team utility.",
+      "aspects": [
+        {
+          "feature": "all-in-one workspace",
+          "sentiment": "positive",
+          "detail": "Combines notes, databases, wikis, and project management."
+        },
+        {
+          "feature": "team usage",
+          "sentiment": "positive",
+          "detail": "Explicitly stated as 'Great for teams'."
+        }
+      ]
+    },
+    "keywords_found": [
+      "Notion",
+      "Obsidian",
+      "note-taking",
+      "Logseq",
+      "Roam Research",
+      "Apple Notes"
+    ],
+    "competitors": [
+      {
+        "name": "Obsidian",
+        "recommended": true,
+        "position": 2
+      },
+      {
+        "name": "Logseq",
+        "recommended": true,
+        "position": 3
+      },
+      {
+        "name": "Roam Research",
+        "recommended": true,
+        "position": 4
+      },
+      {
+        "name": "Apple Notes",
+        "recommended": true,
+        "position": 5
+      }
+    ],
+    "relevant_quotes": [
+      "Notion \u2014 Best all-in-one workspace.",
+      "Combines notes, databases, wikis, and project management. Great for teams."
+    ],
+    "platform": "synthetic-positive"
+  },
+  "_meta": {
+    "elapsed_seconds": 10.0
+  }
+}

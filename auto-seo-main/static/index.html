@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoSEO — Генератор статей</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed' }
+          },
+          animation: {
+            'pulse-slow': 'pulse 2.5s cubic-bezier(0.4,0,0.6,1) infinite',
+            'fade-in': 'fadeIn .4s ease forwards',
+          },
+          keyframes: {
+            fadeIn: { from: { opacity: 0, transform: 'translateY(8px)' }, to: { opacity: 1, transform: 'none' } }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    * { font-family: 'Inter', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; } 
+    ::-webkit-scrollbar-track { background: #1e1e2e; }
+    ::-webkit-scrollbar-thumb { background: #4c4f69; border-radius: 3px; }
+    .glass { background: rgba(255,255,255,0.04); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+    .glow { box-shadow: 0 0 30px rgba(139,92,246,0.15); }
+    .step-active { background: linear-gradient(135deg, #7c3aed22, #a78bfa11); border-color: #7c3aed; }
+    .step-done { background: linear-gradient(135deg, #05966922, #10b98111); border-color: #059669; }
+    .step-idle { border-color: #374151; }
+    article-content h1 { font-size: 2em; font-weight: 700; margin: 1rem 0; }
+    article-content h2 { font-size: 1.5em; font-weight: 600; margin: .875rem 0; }
+    article-content h3 { font-size: 1.25em; font-weight: 600; margin: .75rem 0; }
+    .prose-dark h1, .prose-dark h2, .prose-dark h3 { color: #e2e8f0; font-weight: 700; margin: 1.25em 0 .5em; }
+    .prose-dark h1 { font-size: 1.875rem; }
+    .prose-dark h2 { font-size: 1.5rem; border-bottom: 1px solid #374151; padding-bottom: .4em; }
+    .prose-dark h3 { font-size: 1.25rem; color: #a78bfa; }
+    .prose-dark p  { color: #cbd5e1; line-height: 1.8; margin: .75em 0; }
+    .prose-dark strong { color: #f1f5f9; }
+    .prose-dark ul, .prose-dark ol { color: #cbd5e1; padding-left: 1.5em; margin: .5em 0; }
+    .prose-dark li { margin: .3em 0; }
+    .tab-active { border-bottom: 2px solid #8b5cf6; color: #a78bfa; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen relative">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm">A</div>
+        <span class="text-lg font-semibold text-white">AutoSEO</span>
+        <span class="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">Генератор</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="openSettings()" class="text-xs font-medium text-gray-300 hover:text-brand-400 bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2">
+          <span>⚙️ Настройки API</span>
+        </button>
+        <a href="/docs" target="_blank" class="text-xs text-gray-500 hover:text-brand-400 transition-colors">API Документация →</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+    <!-- Left panel: form + pipeline + log -->
+    <div class="lg:col-span-1 space-y-6">
+
+      <!-- Generate form -->
+      <div class="glass rounded-2xl p-6 glow animate-fade-in">
+        <h2 class="text-base font-semibold text-white mb-5 flex items-center gap-2">
+          <span class="text-brand-400">✦</span> Новая статья
+        </h2>
+        <form id="genForm" class="space-y-4">
+          <div>
+            <label class="block text-xs text-gray-400 mb-1.5 font-medium">Тема / Ключевое слово</label>
+            <input id="topicInput" type="text"
+              placeholder="например: лучшие фреймворки JavaScript 2025"
+              class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-sm text-gray-100
+                     placeholder-gray-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30
+                     transition-all"
+              required minlength="3" maxlength="200" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5 font-medium">Объем слов</label>
+              <input id="wordCount" type="number" value="1500" min="300" max="10000" step="100"
+                class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-100
+                       focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30 transition-all" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-400 mb-1.5 font-medium">Язык</label>
+              <select id="langSelect"
+                class="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-100
+                       focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30 transition-all">
+                <option value="ru">🇷🇺 Русский</option>
+                <option value="en">🇬🇧 Английский</option>
+                <option value="de">🇩🇪 Немецкий</option>
+                <option value="fr">🇫🇷 Французский</option>
+                <option value="es">🇪🇸 Испанский</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" id="genBtn"
+            class="w-full bg-brand-600 hover:bg-brand-500 active:scale-95 text-white font-semibold
+                   py-2.5 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 mt-2">
+            <span id="genBtnIcon">⚡</span>
+            <span id="genBtnText">Сгенерировать статью</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Pipeline Steps -->
+      <div class="glass rounded-2xl p-6 animate-fade-in" id="pipelinePanel" style="display:none">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Прогресс генерации</h2>
+        <div class="space-y-2" id="stepsContainer"></div>
+      </div>
+
+      <!-- Live Event Log -->
+      <div class="glass rounded-2xl p-5 animate-fade-in" id="logPanel" style="display:none">
+        <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Журнал событий</h2>
+        <div id="eventLog" class="space-y-1.5 max-h-52 overflow-y-auto text-xs font-mono"></div>
+      </div>
+
+      <!-- Recent Jobs -->
+      <div class="glass rounded-2xl p-5 animate-fade-in" id="historyPanel">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Недавние задачи</h2>
+          <button onclick="loadHistory()" class="text-xs text-brand-400 hover:text-brand-300 transition-colors">Обновить</button>
+        </div>
+        <div id="jobHistory" class="space-y-2 text-sm text-gray-500">Загрузка...</div>
+      </div>
+    </div>
+
+    <!-- Right panel: result -->
+    <div class="lg:col-span-2 space-y-6">
+
+      <!-- Status bar -->
+      <div id="statusBar" class="glass rounded-2xl p-5 hidden animate-fade-in">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div id="statusDot" class="w-2.5 h-2.5 rounded-full bg-gray-600"></div>
+            <span id="statusLabel" class="text-sm font-medium text-gray-300">Ожидание</span>
+          </div>
+          <div class="flex items-center gap-4 text-xs text-gray-500">
+            <span id="jobIdLabel"></span>
+            <span id="revLabel"></span>
+          </div>
+        </div>
+        <div id="progressBar" class="mt-3 h-1 bg-gray-800 rounded-full overflow-hidden hidden">
+          <div id="progressFill" class="h-full bg-brand-500 rounded-full transition-all duration-700" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Error block -->
+      <div id="errorBlock" class="hidden glass border border-red-500/30 rounded-2xl p-5 animate-fade-in">
+        <div class="flex items-start gap-3">
+          <span class="text-red-400 text-lg">⚠️</span>
+          <div>
+            <p class="text-sm font-semibold text-red-400">Ошибка пайплайна</p>
+            <p id="errorMsg" class="text-xs text-gray-400 mt-1"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result tabs -->
+      <div id="resultPanel" class="hidden animate-fade-in">
+        <!-- SEO Metadata card -->
+        <div class="glass rounded-2xl p-5 mb-5" id="seoCard">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">SEO Метаданные</h3>
+          <div class="space-y-2">
+            <div>
+              <span class="text-xs text-gray-500">Тег Title</span>
+              <p id="seoTitle" class="text-sm font-semibold text-white mt-0.5"></p>
+            </div>
+            <div>
+              <span class="text-xs text-gray-500">Meta Description</span>
+              <p id="seoDesc" class="text-sm text-gray-300 mt-0.5"></p>
+            </div>
+            <div class="flex gap-4 pt-1">
+              <div>
+                <span class="text-xs text-gray-500">Слуг (Slug)</span>
+                <p id="seoSlug" class="text-xs font-mono text-brand-400 mt-0.5"></p>
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Основной ключ</span>
+                <p id="seoPrimary" class="text-xs text-green-400 mt-0.5 font-medium"></p>
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Оценка качества</span>
+                <p id="qualityScore" class="text-xs font-bold mt-0.5"></p>
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Слов</span>
+                <p id="wordCountResult" class="text-xs text-gray-300 mt-0.5"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="glass rounded-2xl overflow-hidden">
+          <div class="flex border-b border-gray-800 bg-gray-900/50">
+            <button onclick="switchTab('article')" id="tab-article"
+              class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors tab-active">
+              📄 Статья
+            </button>
+            <button onclick="switchTab('faq')" id="tab-faq"
+              class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors">
+              ❓ FAQ
+            </button>
+            <button onclick="switchTab('quality')" id="tab-quality"
+              class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors">
+              📊 Качество
+            </button>
+            <button onclick="switchTab('raw')" id="tab-raw"
+              class="tab-btn px-5 py-3 text-sm font-medium text-gray-400 hover:text-white transition-colors">
+              { } JSON
+            </button>
+            <div class="ml-auto flex items-center px-4">
+              <button id="copyBtn" onclick="copyArticle()"
+                class="text-xs text-gray-500 hover:text-brand-400 transition-colors px-3 py-1.5 rounded-lg
+                       bg-gray-800 hover:bg-gray-700">
+                Копировать
+              </button>
+            </div>
+          </div>
+
+          <!-- Article tab -->
+          <div id="pane-article" class="p-7 prose-dark max-h-[70vh] overflow-y-auto">
+            <div id="articleContent"></div>
+          </div>
+
+          <!-- FAQ tab -->
+          <div id="pane-faq" class="p-7 hidden max-h-[70vh] overflow-y-auto">
+            <div id="faqContent" class="space-y-4"></div>
+          </div>
+
+          <!-- Quality tab -->
+          <div id="pane-quality" class="p-7 hidden max-h-[70vh] overflow-y-auto">
+            <div id="qualityContent"></div>
+          </div>
+
+          <!-- Raw JSON tab -->
+          <div id="pane-raw" class="p-5 hidden max-h-[70vh] overflow-y-auto">
+            <pre id="rawJson" class="text-xs text-gray-400 font-mono whitespace-pre-wrap"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="emptyState" class="glass rounded-2xl p-16 flex flex-col items-center justify-center text-center animate-fade-in">
+        <div class="text-5xl mb-4 opacity-30">✦</div>
+        <p class="text-gray-500 text-sm">Заполните форму слева и нажмите <strong class="text-gray-400">Сгенерировать статью</strong></p>
+        <p class="text-gray-600 text-xs mt-2">ИИ самостоятельно проведет исследование, напишет и проверит текст</p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden flex items-center justify-center">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeSettings()"></div>
+    <div class="glass rounded-2xl p-6 relative w-full max-w-md animate-fade-in shadow-2xl bg-gray-900 border border-gray-700">
+      <h2 class="text-lg font-semibold text-white mb-4">Настройки API</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1.5 font-medium">Ключ Anthropic (Claude)</label>
+          <input id="anthropicKey" type="password" placeholder="sk-ant-..."
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-brand-500" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1.5 font-medium">Ключ SerpAPI</label>
+          <input id="serpapiKey" type="password" placeholder="Вставьте ключ SerpAPI"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-brand-500" />
+        </div>
+        <div id="settingsMsg" class="text-xs font-medium hidden"></div>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button onclick="closeSettings()" class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Отмена</button>
+        <button onclick="saveSettings()" id="saveSettingsBtn" class="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-500 text-white rounded-lg transition-colors flex items-center gap-2">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ─── Settings Logic ───────────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById('settingsModal').classList.remove('hidden');
+  document.getElementById('settingsMsg').classList.add('hidden');
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.add('hidden');
+}
+
+async function saveSettings() {
+  const anthropic = document.getElementById('anthropicKey').value.trim();
+  const serpapi = document.getElementById('serpapiKey').value.trim();
+  const msgEl = document.getElementById('settingsMsg');
+  const btn = document.getElementById('saveSettingsBtn');
+  
+  if (!anthropic && !serpapi) return closeSettings();
+  
+  btn.textContent = 'Сохранение...';
+  btn.disabled = true;
+  
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anthropic_key: anthropic, serpapi_key: serpapi })
+    });
+    
+    if (res.ok) {
+      msgEl.textContent = 'Успешно сохранено!';
+      msgEl.className = 'text-xs font-medium text-green-400 mt-2 block';
+      setTimeout(() => closeSettings(), 1500);
+    } else {
+      throw new Error('Ошибка сохранения');
+    }
+  } catch (err) {
+    msgEl.textContent = 'Ошибка при сохранении';
+    msgEl.className = 'text-xs font-medium text-red-400 mt-2 block';
+  } finally {
+    btn.textContent = 'Сохранить';
+    btn.disabled = false;
+  }
+}
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let currentJobId = null;
+let pollInterval  = null;
+let currentResult = null;
+
+const STEPS = [
+  { key: 'pending',     label: 'В очереди',   icon: '⏳', pct: 0   },
+  { key: 'researching', label: 'Поиск',       icon: '🔍', pct: 15  },
+  { key: 'planning',    label: 'Планирование',icon: '📋', pct: 30  },
+  { key: 'generating',  label: 'Написание',   icon: '✍️',  pct: 55  },
+  { key: 'scoring',     label: 'Оценка',      icon: '📊', pct: 70  },
+  { key: 'reviewing',   label: 'Ревью',       icon: '🔎', pct: 85  },
+  { key: 'editing',     label: 'Правки',      icon: '✂️',  pct: 95  },
+  { key: 'completed',   label: 'Готово',      icon: '✅', pct: 100 },
+];
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderSteps('pending');
+  loadHistory();
+  document.getElementById('genForm').addEventListener('submit', startGeneration);
+});
+
+// ─── Form submit ──────────────────────────────────────────────────────────────
+async function startGeneration(e) {
+  e.preventDefault();
+  const topic = document.getElementById('topicInput').value.trim();
+  const words = parseInt(document.getElementById('wordCount').value);
+  const lang  = document.getElementById('langSelect').value;
+
+  if (!topic) return;
+
+  setBtnLoading(true);
+  hideError();
+  showStatusBar();
+  showPipeline();
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('resultPanel').classList.add('hidden');
+  clearLog();
+
+  try {
+    const res = await fetch('/api/jobs/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, target_word_count: words, language: lang })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || \`Ошибка HTTP \${res.status}\`);
+    }
+    const job = await res.json();
+    currentJobId = job.job_id;
+    document.getElementById('jobIdLabel').textContent = \`ID: \${job.job_id.slice(0,8)}…\`;
+    updateStatus(job);
+    startPolling();
+  } catch (err) {
+    showError(err.message);
+    setBtnLoading(false);
+  }
+}
+
+// ─── Polling ──────────────────────────────────────────────────────────────────
+function startPolling() {
+  stopPolling();
+  pollInterval = setInterval(pollJob, 2500);
+}
+
+function stopPolling() {
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+}
+
+async function pollJob() {
+  if (!currentJobId) return;
+  try {
+    const res = await fetch(\`/api/jobs/\${currentJobId}\`);
+    if (!res.ok) return;
+    const job = await res.json();
+    updateStatus(job);
+    appendEvents(job.events_data);
+    if (job.status === 'completed') {
+      stopPolling();
+      setBtnLoading(false);
+      renderResult(job);
+      loadHistory();
+    } else if (job.status === 'failed') {
+      stopPolling();
+      setBtnLoading(false);
+      showError(job.error || 'Пайплайн завершился с ошибкой');
+      loadHistory();
+    }
+  } catch (_) {}
+}
+
+// ─── Status / steps ───────────────────────────────────────────────────────────
+function updateStatus(job) {
+  const step = STEPS.find(s => s.key === job.status) || STEPS[0];
+
+  const dot   = document.getElementById('statusDot');
+  const label = document.getElementById('statusLabel');
+  const fill  = document.getElementById('progressFill');
+  const bar   = document.getElementById('progressBar');
+  const rev   = document.getElementById('revLabel');
+
+  bar.classList.remove('hidden');
+  fill.style.width = step.pct + '%';
+  rev.textContent  = job.revision_count > 0 ? \`Правка \${job.revision_count}\` : '';
+
+  if (job.status === 'completed') {
+    dot.className   = 'w-2.5 h-2.5 rounded-full bg-green-400';
+    label.textContent = '✅ Завершено';
+    label.className   = 'text-sm font-medium text-green-400';
+  } else if (job.status === 'failed') {
+    dot.className   = 'w-2.5 h-2.5 rounded-full bg-red-400';
+    label.textContent = '❌ Ошибка';
+    label.className   = 'text-sm font-medium text-red-400';
+  } else {
+    dot.className   = 'w-2.5 h-2.5 rounded-full bg-brand-400 animate-pulse';
+    label.textContent = \`\${step.icon} \${step.label}…\`;
+    label.className   = 'text-sm font-medium text-gray-300';
+  }
+
+  renderSteps(job.status);
+}
+
+function renderSteps(currentStatus) {
+  const container = document.getElementById('stepsContainer');
+  const activeIdx = STEPS.findIndex(s => s.key === currentStatus);
+
+  container.innerHTML = STEPS
+    .filter(s => s.key !== 'pending')
+    .map((s, i) => {
+      const realIdx = i + 1;
+      const isDone   = realIdx < activeIdx;
+      const isActive = realIdx === activeIdx;
+      const cls = isDone ? 'step-done' : isActive ? 'step-active' : 'step-idle';
+      const textCls = isDone ? 'text-green-400' : isActive ? 'text-brand-400' : 'text-gray-600';
+      return \`
+        <div class="flex items-center gap-3 px-3 py-2 rounded-lg border \${cls} transition-all duration-300">
+          <span class="text-sm">\${isDone ? '✅' : s.icon}</span>
+          <span class="text-xs font-medium \${textCls} flex-1">\${s.label}</span>
+          \${isActive ? '<span class="text-xs text-brand-400 animate-pulse">●</span>' : ''}
+        </div>\`;
+    }).join('');
+}
+
+// ─── Event Log ────────────────────────────────────────────────────────────────
+let seenEvents = new Set();
+
+function appendEvents(events) {
+  if (!events || !events.length) return;
+  const log = document.getElementById('eventLog');
+  document.getElementById('logPanel').style.display = '';
+
+  events.forEach(ev => {
+    const key = ev.timestamp + ev.event;
+    if (seenEvents.has(key)) return;
+    seenEvents.add(key);
+
+    const time = new Date(ev.timestamp).toLocaleTimeString();
+    const el = document.createElement('div');
+    el.className = 'text-gray-500 animate-fade-in';
+    el.innerHTML = \`<span class="text-gray-700">\${time}</span> <span class="text-brand-400">[\${ev.step}]</span> \${ev.detail || ev.event}\`;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  });
+}
+
+function clearLog() {
+  seenEvents.clear();
+  document.getElementById('eventLog').innerHTML = '';
+}
+
+// ─── Render Result ────────────────────────────────────────────────────────────
+function renderResult(job) {
+  const r = job.result;
+  if (!r) return;
+  currentResult = r;
+
+  document.getElementById('resultPanel').classList.remove('hidden');
+
+  // SEO card
+  document.getElementById('seoTitle').textContent   = r.seo_metadata?.title_tag || '';
+  document.getElementById('seoDesc').textContent    = r.seo_metadata?.meta_description || '';
+  document.getElementById('seoSlug').textContent    = '/' + (r.seo_metadata?.slug || '');
+  document.getElementById('seoPrimary').textContent = r.seo_metadata?.primary_keyword || '';
+
+  const q = r.quality?.overall ?? 0;
+  const qEl = document.getElementById('qualityScore');
+  qEl.textContent = \`\${Math.round(q * 100)}%\`;
+  qEl.className   = \`text-xs font-bold mt-0.5 \${q >= 0.8 ? 'text-green-400' : q >= 0.6 ? 'text-yellow-400' : 'text-red-400'}\`;
+
+  document.getElementById('wordCountResult').textContent = \`\${r.content?.total_word_count ?? 0} слов\`;
+
+  // Article
+  const sections = r.content?.sections || [];
+  document.getElementById('articleContent').innerHTML = sections.map(s => {
+    const tag = s.heading_level || 'h2';
+    return \`<\${tag}>\${escHtml(s.heading)}</\${tag}><p>\${escHtml(s.content).replace(/\\n/g,'</p><p>')}</p>\`;
+  }).join('');
+
+  // FAQ
+  const faqs = r.content?.faq || [];
+  document.getElementById('faqContent').innerHTML = faqs.length
+    ? faqs.map(f => \`
+        <div class="glass rounded-xl p-4">
+          <p class="text-sm font-semibold text-white mb-1">\${escHtml(f.question)}</p>
+          <p class="text-sm text-gray-400">\${escHtml(f.answer)}</p>
+        </div>\`).join('')
+    : '<p class="text-gray-600 text-sm">FAQ не был сгенерирован.</p>';
+
+  // Quality dimensions
+  const dims = r.quality?.dimensions || [];
+  document.getElementById('qualityContent').innerHTML = \`
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-semibold text-white">Общая оценка</span>
+        <span class="text-2xl font-bold \${q>=.8?'text-green-400':q>=.6?'text-yellow-400':'text-red-400'}">\${Math.round(q*100)}%</span>
+      </div>
+      <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-700 \${q>=.8?'bg-green-500':q>=.6?'bg-yellow-500':'bg-red-500'}" style="width:\${q*100}%"></div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">\${r.review?.summary || ''}</p>
+    </div>
+    <div class="space-y-3">
+      \${dims.map(d => \`
+        <div class="glass rounded-xl p-3">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-medium text-gray-300">\${escHtml(d.name)}</span>
+            <span class="text-xs font-bold \${d.score>=.8?'text-green-400':d.score>=.6?'text-yellow-400':'text-red-400'}">\${Math.round(d.score*100)}%</span>
+          </div>
+          <div class="h-1 bg-gray-800 rounded-full overflow-hidden">
+            <div class="h-full rounded-full \${d.score>=.8?'bg-green-500':d.score>=.6?'bg-yellow-500':'bg-red-500'}" style="width:\${d.score*100}%"></div>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">\${escHtml(d.feedback)}</p>
+        </div>\`).join('')}
+    </div>\`;
+
+  // Raw JSON
+  document.getElementById('rawJson').textContent = JSON.stringify(r, null, 2);
+
+  switchTab('article');
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  ['article','faq','quality','raw'].forEach(t => {
+    document.getElementById(\`pane-\${t}\`).classList.toggle('hidden', t !== name);
+    const btn = document.getElementById(\`tab-\${t}\`);
+    btn.classList.toggle('tab-active', t === name);
+    btn.classList.toggle('text-gray-400', t !== name);
+    btn.classList.toggle('text-brand-400', t === name);
+  });
+}
+
+// ─── Job history ──────────────────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/jobs/?limit=8');
+    if (!res.ok) return;
+    const data = await res.json();
+    const container = document.getElementById('jobHistory');
+
+    if (!data.jobs || !data.jobs.length) {
+      container.innerHTML = '<p class="text-xs text-gray-600">Пока нет задач.</p>';
+      return;
+    }
+
+    container.innerHTML = data.jobs.map(j => {
+      const statusColors = {
+        completed: 'text-green-400', failed: 'text-red-400',
+        pending: 'text-gray-500', researching: 'text-blue-400',
+        planning: 'text-yellow-400', generating: 'text-brand-400',
+        scoring: 'text-purple-400', reviewing: 'text-orange-400', editing: 'text-pink-400'
+      };
+      const col = statusColors[j.status] || 'text-gray-500';
+      const time = new Date(j.updated_at).toLocaleTimeString();
+      return \`
+        <div class="flex items-center gap-2 cursor-pointer hover:bg-gray-800/40 px-2 py-1.5 rounded-lg transition-colors group"
+             onclick="loadJob('\${j.job_id}')">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs text-gray-300 truncate group-hover:text-white">\${escHtml(j.topic)}</p>
+            <p class="text-xs \${col} font-medium">\${j.status}</p>
+          </div>
+          <span class="text-xs text-gray-600 shrink-0">\${time}</span>
+        </div>\`;
+    }).join('');
+  } catch (_) {}
+}
+
+async function loadJob(jobId) {
+  try {
+    const res = await fetch(\`/api/jobs/\${jobId}?full=true\`);
+    if (!res.ok) return;
+    const job = await res.json();
+    currentJobId = jobId;
+    showStatusBar();
+    showPipeline();
+    document.getElementById('emptyState').classList.add('hidden');
+    document.getElementById('jobIdLabel').textContent = \`ID: \${jobId.slice(0,8)}…\`;
+    document.getElementById('revLabel').textContent = job.revision_count > 0 ? \`Правка \${job.revision_count}\` : '';
+    updateStatus(job);
+    appendEvents(job.events_data);
+    if (job.status === 'completed') renderResult(job);
+    else if (job.status === 'failed')  showError(job.error || 'Ошибка');
+  } catch (_) {}
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
+function setBtnLoading(loading) {
+  const btn  = document.getElementById('genBtn');
+  const icon = document.getElementById('genBtnIcon');
+  const txt  = document.getElementById('genBtnText');
+  btn.disabled = loading;
+  if (loading) {
+    icon.textContent = '⏳';
+    txt.textContent  = 'Создание...';
+    btn.classList.add('opacity-70', 'cursor-not-allowed');
+  } else {
+    icon.textContent = '⚡';
+    txt.textContent  = 'Сгенерировать статью';
+    btn.classList.remove('opacity-70', 'cursor-not-allowed');
+  }
+}
+
+function showStatusBar() { document.getElementById('statusBar').classList.remove('hidden'); }
+function showPipeline()  { document.getElementById('pipelinePanel').style.display = ''; }
+function showError(msg)  {
+  document.getElementById('errorBlock').classList.remove('hidden');
+  document.getElementById('errorMsg').textContent = msg;
+}
+function hideError() { document.getElementById('errorBlock').classList.add('hidden'); }
+
+function copyArticle() {
+  if (!currentResult) return;
+  const text = (currentResult.content?.sections || [])
+    .map(s => \`## \${s.heading}\\n\\n\${s.content}\`)
+    .join('\\n\\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Скопировано!';
+    setTimeout(() => btn.textContent = 'Копировать', 2000);
+  });
+}
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>

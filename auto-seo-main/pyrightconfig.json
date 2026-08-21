@@ -1,0 +1,19 @@
+{
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "strict",
+  "include": ["."],
+  "exclude": ["venv", ".venv"],
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false,
+  "reportUntypedBaseClass": false,
+  "reportUntypedFunctionDecorator": false,
+  "reportUntypedClassDecorator": false,
+  "reportMissingParameterType": false,
+  "reportPrivateUsage": false,
+  "reportUnknownMemberType": false,
+  "reportUnknownVariableType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownParameterType": false,
+  "reportUnknownLambdaType": false,
+  "reportMissingTypeArgument": false
+}

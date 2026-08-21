@@ -1,0 +1,11 @@
+{
+  "results": [
+    {
+      "backend": "gemini",
+      "model": "gemini-3-flash-preview",
+      "response_length": 19,
+      "response_preview": "1. **Improved Work-",
+      "elapsed": 2.41
+    }
+  ]
+}

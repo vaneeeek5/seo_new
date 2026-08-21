@@ -1,0 +1,96 @@
+{
+  "query": "what is retrieval augmented generation",
+  "model": "gemini-3-flash-preview",
+  "content_source": "tests/fixtures/article_good.html",
+  "gap_summary": {
+    "covered": 0,
+    "total": 12,
+    "coverage_percent": 0,
+    "covered_types": [],
+    "missing_types": [
+      "comparative",
+      "definitional",
+      "feature_specific",
+      "how_to",
+      "trust_signals",
+      "use_case"
+    ]
+  },
+  "sub_queries": [
+    {
+      "type": "comparative",
+      "query": "RAG vs fine-tuning for large language models: pros and cons",
+      "covered": false,
+      "similarity_score": 0.58
+    },
+    {
+      "type": "comparative",
+      "query": "Retrieval augmented generation vs long context window models like Gemini 1.5",
+      "covered": false,
+      "similarity_score": 0.54
+    },
+    {
+      "type": "feature_specific",
+      "query": "The role of vector databases in retrieval augmented generation",
+      "covered": false,
+      "similarity_score": 0.54
+    },
+    {
+      "type": "feature_specific",
+      "query": "Hybrid search techniques in RAG: combining semantic and keyword search",
+      "covered": false,
+      "similarity_score": 0.55
+    },
+    {
+      "type": "use_case",
+      "query": "Using RAG for enterprise internal knowledge base search",
+      "covered": false,
+      "similarity_score": 0.56
+    },
+    {
+      "type": "use_case",
+      "query": "RAG implementation for automated customer support in fintech",
+      "covered": false,
+      "similarity_score": 0.48
+    },
+    {
+      "type": "trust_signals",
+      "query": "Case studies on RAG reducing hallucination rates in AI",
+      "covered": false,
+      "similarity_score": 0.49
+    },
+    {
+      "type": "trust_signals",
+      "query": "Research benchmarks comparing RAG-based LLMs to vanilla LLMs",
+      "covered": false,
+      "similarity_score": 0.55
+    },
+    {
+      "type": "how_to",
+      "query": "How to build a RAG pipeline using LangChain and Python",
+      "covered": false,
+      "similarity_score": 0.65
+    },
+    {
+      "type": "how_to",
+      "query": "Step-by-step guide to document chunking and embedding for RAG",
+      "covered": false,
+      "similarity_score": 0.52
+    },
+    {
+      "type": "definitional",
+      "query": "Foundational concepts of Retrieval-Augmented Generation (RAG)",
+      "covered": false,
+      "similarity_score": 0.66
+    },
+    {
+      "type": "definitional",
+      "query": "What is the difference between the retriever and the generator in RAG",
+      "covered": false,
+      "similarity_score": 0.56
+    }
+  ],
+  "_meta": {
+    "elapsed_seconds": 9.55
+  }
+}

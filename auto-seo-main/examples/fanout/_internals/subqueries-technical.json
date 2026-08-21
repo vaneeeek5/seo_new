@@ -1,0 +1,82 @@
+{
+  "query": "how to implement RAG with LangChain",
+  "model": "gemini-3-flash-preview",
+  "count": 12,
+  "sub_queries": [
+    {
+      "type": "comparative",
+      "query": "LangChain vs LlamaIndex for RAG applications",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "comparative",
+      "query": "ChromaDB vs Pinecone for LangChain vector storage",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "feature_specific",
+      "query": "using LangChain MultiQueryRetriever for query expansion",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "feature_specific",
+      "query": "optimizing chunking strategies in LangChain for RAG",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "use_case",
+      "query": "building a customer support bot with LangChain RAG",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "use_case",
+      "query": "implementing LangChain RAG for analyzing financial documents",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "trust_signals",
+      "query": "LangChain RAG production performance benchmarks",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "trust_signals",
+      "query": "case studies of companies using LangChain for RAG",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "how_to",
+      "query": "how to build a basic RAG pipeline with LangChain and Python",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "how_to",
+      "query": "how to add conversational memory to LangChain RAG systems",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "definitional",
+      "query": "what is retrieval augmented generation RAG in LangChain",
+      "covered": null,
+      "similarity_score": null
+    },
+    {
+      "type": "definitional",
+      "query": "understanding the core components of LangChain RAG",
+      "covered": null,
+      "similarity_score": null
+    }
+  ],
+  "_meta": {
+    "elapsed_seconds": 15.92
+  }
+}
