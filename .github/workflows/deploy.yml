@@ -6,63 +6,13 @@ on:
       - main
       - production
 
-env:
-  REGISTRY: ghcr.io
-
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set lower case repository name
-        run: |
-          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push API
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.REPO_LC }}-api:latest
-
-      - name: Build and push Web
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/web/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.REPO_LC }}-web:latest
-
   deploy:
-    needs: build-and-push
     runs-on: ubuntu-latest
     
     steps:
-      - name: Set lower case repository name
-        run: |
-          echo "REPO_LC=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          CR_PAT: ${{ secrets.GITHUB_TOKEN }}
-          REGISTRY: ghcr.io
-          ACTOR: ${{ github.actor }}
-          REPO_LC: ${{ env.REPO_LC }}
         with:
           host: '80.78.241.208'
           username: 'root'
@@ -71,7 +21,6 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD || secrets.ROOT_PASSWORD || secrets.SERVER_PASSWORD || secrets.PASSWORD || secrets.VPS_PASSWORD }}
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           command_timeout: 30m
-          envs: CR_PAT,REGISTRY,ACTOR,REPO_LC
           script: |
             export DEBIAN_FRONTEND=noninteractive
             echo "🚀 [CI/CD] Connected to server 80.78.241.208 successfully!"
@@ -80,51 +29,38 @@ jobs:
             mkdir -p $TARGET_DIR
             cd $TARGET_DIR
             
-            # Sync repository to get latest docker-compose.prod.yml
+            # Sync repository
             if [ -d ".git" ]; then
               echo "📥 Pulling latest commits from GitHub main..."
+              git remote set-url origin https://github.com/vaneeeek5/seo_new.git
               git fetch --all
               git reset --hard origin/main
             else
               echo "📥 Cloning repository from GitHub..."
-              git clone https://github.com/vaneeeek5/seo_saas.git .
+              git clone https://github.com/vaneeeek5/seo_new.git .
             fi
             
-            chmod +x scripts/setup-server.sh
-            ./scripts/setup-server.sh
+            echo "🔧 Setting up Python environment..."
+            cd auto-seo-main
             
-            echo "🔑 Logging into GHCR on server..."
-            echo $CR_PAT | docker login $REGISTRY -u $ACTOR --password-stdin
+            # Ensure uv is installed
+            if ! command -v uv &> /dev/null; then
+                curl -LsSf https://astral.sh/uv/install.sh | sh
+                export PATH="$HOME/.cargo/bin:$PATH"
+            fi
             
-            echo "📥 Pulling latest images from GHCR..."
-            # Create a localized copy of compose file with resolved env variables if needed, 
-            # but since REPO_LC is available, we can just export it.
-            export GITHUB_REPOSITORY_LC=$REPO_LC
+            echo "📦 Installing dependencies..."
+            uv sync --extra dev --python 3.12
             
-            # We must dynamically replace ${GITHUB_REPOSITORY,,} inside docker-compose.prod.yml 
-            # because standard docker-compose doesn't support bash string manipulation like ,,
-            sed -i "s|\${GITHUB_REPOSITORY,,}|$REPO_LC|g" docker-compose.prod.yml
+            echo "🐳 Ensuring Database and Redis are running..."
+            docker-compose up -d || docker compose up -d
             
-            docker compose -f docker-compose.prod.yml pull
+            echo "🔄 Restarting API server..."
+            # Find and kill existing uvicorn process
+            pkill -f "uvicorn app.main:app" || true
             
-            echo "🐳 Starting updated containers..."
-            docker compose -f docker-compose.prod.yml up -d
+            # Start in background
+            nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
             
-            echo "⏳ Waiting for API to be healthy on port 4000..."
-            for i in $(seq 1 20); do
-              if curl -s --max-time 3 http://localhost:4000/health > /dev/null 2>&1 || \
-                 curl -s --max-time 3 http://localhost:4000/semantics/wordstat-status > /dev/null 2>&1; then
-                echo "✅ API is responding on port 4000!"
-                break
-              fi
-              echo "  Attempt $i/20 - waiting for API..."
-              sleep 3
-            done
-            
-            echo "🔍 Syncing PostgreSQL Prisma schema..."
-            docker compose -f docker-compose.prod.yml exec -T api npx prisma db push --schema=apps/api/prisma/schema.prisma --accept-data-loss || true
-            
-            echo "📊 Docker Container Status:"
-            docker compose -f docker-compose.prod.yml ps
-            
-            echo "🎉 [CI/CD] Automated Deployment from GHCR Completed Successfully!"
+            echo "✅ API server started on port 8000!"
+            echo "🎉 [CI/CD] Automated Deployment Completed Successfully!"
