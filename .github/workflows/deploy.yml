@@ -55,26 +55,12 @@ jobs:
             echo "🐳 Ensuring Database and Redis are running..."
             docker-compose up -d || docker compose up -d
             
-            echo "⚙️ Configuring Nginx to proxy port 80 to 4000..."
-            cat << 'EOF' > /etc/nginx/sites-available/default
-            server {
-                listen 80 default_server;
-                listen [::]:80 default_server;
-                
-                location / {
-                    proxy_pass http://localhost:4000;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade $http_upgrade;
-                    proxy_set_header Connection 'upgrade';
-                    proxy_set_header Host $host;
-                    proxy_cache_bypass $http_upgrade;
-                }
-            }
+            echo "📄 Writing .env configuration..."
+            cat << 'EOF' > .env
+            DATABASE_URL=postgresql+asyncpg://seo:seo@localhost:5433/seo_agent
+            REDIS_URL=redis://localhost:6379/0
+            CORS_ORIGINS=http://localhost:3000,http://80.78.241.208
             EOF
-            
-            echo "🔄 Starting Nginx..."
-            systemctl restart nginx || true
-            systemctl enable nginx || true
             
             echo "🔥 Opening port 80 in firewall..."
             ufw allow 80/tcp || true
@@ -93,7 +79,7 @@ jobs:
             User=root
             WorkingDirectory=/var/www/seo_saas/auto-seo-main
             Environment="PATH=$UV_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            ExecStart=$UV_PATH run uvicorn app.main:app --host 0.0.0.0 --port 4000
+            ExecStart=$UV_PATH run uvicorn app.main:app --host 0.0.0.0 --port 80
             Restart=always
             
             [Install]
@@ -104,9 +90,9 @@ jobs:
             systemctl enable autoseo
             systemctl restart autoseo
             
-            echo "✅ API server started on port 4000 via systemd!"
+            echo "✅ API server started on port 80 via systemd!"
             
             echo "📋 Recent logs of autoseo.service:"
-            sleep 3
+            sleep 5
             journalctl -u autoseo -n 50 --no-pager
             echo "🎉 [CI/CD] Automated Deployment Completed Successfully!"
