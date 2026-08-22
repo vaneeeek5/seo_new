@@ -1,0 +1,36 @@
+name: Diagnostics
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Diagnostics via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: '80.78.241.208'
+          username: 'root'
+          port: 22
+          key: ${{ secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          password: ${{ secrets.SSH_PASSWORD || secrets.ROOT_PASSWORD || secrets.SERVER_PASSWORD || secrets.PASSWORD || secrets.VPS_PASSWORD }}
+          command_timeout: 5m
+          script: |
+            echo "--- DOCKER PS ---"
+            docker ps -a
+            echo "--- NETSTAT ---"
+            netstat -tulpn | grep -E ':80|:4000|:3000' || true
+            echo "--- NGINX STATUS ---"
+            systemctl status nginx --no-pager || true
+            echo "--- UFW STATUS ---"
+            ufw status verbose || true
+            echo "--- AUTOSEO SERVICE STATUS ---"
+            systemctl status autoseo --no-pager || true
+            echo "--- CURL 4000 ---"
+            curl -I http://localhost:4000 || true
+            echo "--- CURL 80 ---"
+            curl -I http://localhost:80 || true
