@@ -55,12 +55,13 @@ jobs:
             echo "🐳 Ensuring Database and Redis are running..."
             docker-compose up -d || docker compose up -d
             
-            echo "🛑 Stopping old Nginx (to free up port 80)..."
-            systemctl stop nginx || true
-            systemctl disable nginx || true
+            echo "🔄 Starting Nginx (in case it proxies to 4000)..."
+            systemctl start nginx || true
+            systemctl enable nginx || true
             
-            echo "🔥 Opening port 80 in firewall..."
+            echo "🔥 Opening ports 80 and 4000 in firewall..."
             ufw allow 80/tcp || true
+            ufw allow 4000/tcp || true
             
             echo "⚙️ Configuring systemd service..."
             cat << 'EOF' > /etc/systemd/system/autoseo.service
@@ -72,7 +73,7 @@ jobs:
             User=root
             WorkingDirectory=/var/www/seo_saas/auto-seo-main
             Environment="PATH=/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            ExecStart=/root/.cargo/bin/uv run uvicorn app.main:app --host 0.0.0.0 --port 80
+            ExecStart=/root/.cargo/bin/uv run uvicorn app.main:app --host 0.0.0.0 --port 4000
             Restart=always
             
             [Install]
@@ -83,5 +84,9 @@ jobs:
             systemctl enable autoseo
             systemctl restart autoseo
             
-            echo "✅ API server started on port 80 via systemd!"
+            echo "✅ API server started on port 4000 via systemd!"
+            
+            echo "📋 Recent logs of autoseo.service:"
+            sleep 3
+            journalctl -u autoseo -n 50 --no-pager
             echo "🎉 [CI/CD] Automated Deployment Completed Successfully!"
